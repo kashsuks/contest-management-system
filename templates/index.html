@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coding Contest</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+
+        nav {
+            background-color: #1976d2;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .code-editor {
+            width: 100%;
+            height: 300px;
+            font-family: monospace;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f5f5f5;
+        }
+
+        .problem-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .CodeMirror {
+            height: 400px;
+        }
+        .nav-tabs {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">Coding Contest</a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-item nav-link text-light" id="username"></span>
+                <a class="nav-link" href="/logout">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <!-- Problems List -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Problems</h5>
+                    </div>
+                    <div class="card-body problem-list" id="problemList">
+                        <!-- Problems will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Problem Details and Submission -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="mainTabs">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#problemDetails">Problem</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#submit">Submit</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#submissions">My Submissions</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#leaderboard">Leaderboard</a>
+                            </li>
+                            <li class="nav-item admin-only" style="display: none;">
+                                <a class="nav-link" data-bs-toggle="tab" href="#admin">Admin</a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+                            <!-- Problem Details -->
+                            <div class="tab-pane fade show active" id="problemDetails">
+                                <div id="problemContent">
+                                    <h3 id="problemTitle"></h3>
+                                    <div id="problemDescription"></div>
+                                </div>
+                            </div>
+
+                            <!-- Submit Solution -->
+                            <div class="tab-pane fade" id="submit">
+                                <form id="submitForm">
+                                    <div class="mb-3">
+                                        <label class="form-label">Problem</label>
+                                        <select class="form-select" id="problemSelect" required>
+                                            <option value="">Select a problem</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Language</label>
+                                        <select class="form-select" id="language">
+                                            <option value="python">Python</option>
+                                            <option value="cpp">C++</option>
+                                            <option value="java">Java</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Code</label>
+                                        <textarea id="code"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Submit</button>
+                                </form>
+                            </div>
+
+                            <!-- Submissions -->
+                            <div class="tab-pane fade" id="submissions">
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Problem</th>
+                                                <th>Language</th>
+                                                <th>Status</th>
+                                                <th>Time</th>
+                                                <th>Memory</th>
+                                                <th>Submitted</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="submissionsList"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Leaderboard -->
+                            <div class="tab-pane fade" id="leaderboard">
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Rank</th>
+                                                <th>Username</th>
+                                                <th>Solved</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="leaderboardList"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Admin Panel -->
+                            <div class="tab-pane fade" id="admin">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">Create User</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <form id="createUserForm">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Username</label>
+                                                        <input type="text" class="form-control" id="newUsername" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Email</label>
+                                                        <input type="email" class="form-control" id="newEmail" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Password</label>
+                                                        <input type="password" class="form-control" id="newPassword" required>
+                                                    </div>
+                                                    <button type="submit" class="btn btn-primary">Create User</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">Create Problem</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <form id="createProblemForm">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Title</label>
+                                                        <input type="text" class="form-control" name="title" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Description</label>
+                                                        <textarea class="form-control" name="description" rows="3" required></textarea>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Difficulty</label>
+                                                        <select class="form-select" name="difficulty" required>
+                                                            <option value="Easy">Easy</option>
+                                                            <option value="Medium">Medium</option>
+                                                            <option value="Hard">Hard</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Time Limit (ms)</label>
+                                                        <input type="number" class="form-control" name="time_limit" value="1000" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Memory Limit (MB)</label>
+                                                        <input type="number" class="form-control" name="memory_limit" value="256" required>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label">Test Cases</label>
+                                                        <div id="testCases">
+                                                            <div class="test-case mb-2">
+                                                                <input type="text" class="form-control mb-2" placeholder="Input" required>
+                                                                <input type="text" class="form-control" placeholder="Output" required>
+                                                            </div>
+                                                        </div>
+                                                        <button type="button" class="btn btn-secondary" onclick="addTestCase()">Add Test Case</button>
+                                                    </div>
+                                                    <button type="submit" class="btn btn-primary">Create Problem</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+    <script>
+        // Initialize CodeMirror
+        const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
+            mode: 'python',
+            theme: 'monokai',
+            lineNumbers: true,
+            autoCloseBrackets: true,
+            matchBrackets: true,
+            indentUnit: 4,
+            tabSize: 4,
+            lineNumberFormatter: function(line) {
+                return line;
+            },
+            extraKeys: {
+                "Tab": function(cm) {
+                    if (cm.somethingSelected()) {
+                        cm.indentSelection("add");
+                    } else {
+                        cm.replaceSelection("    ", "end");
+                    }
+                }
+            }
+        });
+
+        // Update editor mode when language changes
+        document.getElementById('language').addEventListener('change', (e) => {
+            const mode = e.target.value === 'python' ? 'python' : 'text/x-c++src';
+            editor.setOption('mode', mode);
+        });
+
+        // Load problems
+        async function loadProblems() {
+            console.log('Loading problems...');
+            try {
+                const response = await fetch('/problems');
+                const problems = await response.json();
+                console.log('Problems loaded:', problems);
+                
+                // Update problem list
+                const problemList = document.getElementById('problemList');
+                problemList.innerHTML = problems.map(p => `
+                    <div class="card mb-2">
+                        <div class="card-body">
+                            <h5 class="card-title">${p.title}</h5>
+                            <p class="card-text">
+                                <span class="badge bg-${p.difficulty === 'Easy' ? 'success' : p.difficulty === 'Medium' ? 'warning' : 'danger'}">${p.difficulty}</span>
+                            </p>
+                            <button class="btn btn-primary btn-sm" onclick="loadProblem(${p.id})">View Problem</button>
+                        </div>
+                    </div>
+                `).join('');
+
+                // Update problem select dropdown
+                const problemSelect = document.getElementById('problemSelect');
+                problemSelect.innerHTML = `
+                    <option value="">Select a problem</option>
+                    ${problems.map(p => `
+                        <option value="${p.id}">${p.title} (${p.difficulty})</option>
+                    `).join('')}
+                `;
+            } catch (error) {
+                console.error('Error loading problems:', error);
+            }
+        }
+
+        // Load problem details
+        async function loadProblem(id) {
+            const response = await fetch(`/problem/${id}`);
+            const problem = await response.json();
+            document.getElementById('problemTitle').textContent = problem.title;
+            document.getElementById('problemDescription').innerHTML = problem.description.replace(/\n/g, '<br>');
+            
+            // Store the problem ID for submission
+            document.getElementById('submitForm').dataset.problemId = id;
+            
+            // Switch to problem details tab
+            document.querySelector('a[href="#problemDetails"]').click();
+        }
+
+        // Load submissions
+        async function loadSubmissions() {
+            const response = await fetch('/submissions');
+            const submissions = await response.json();
+            document.getElementById('submissionsList').innerHTML = submissions.map(s => `
+                <tr>
+                    <td>${s.problem.title}</td>
+                    <td>${s.language}</td>
+                    <td><span class="badge bg-${s.status === 'AC' ? 'success' : 'danger'}">${s.status}</span></td>
+                    <td>${s.execution_time ? s.execution_time.toFixed(2) + 'ms' : '-'}</td>
+                    <td>${s.memory_used ? s.memory_used.toFixed(2) + 'KB' : '-'}</td>
+                    <td>${new Date(s.submitted_at).toLocaleString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Load leaderboard
+        async function loadLeaderboard() {
+            const response = await fetch('/leaderboard');
+            const leaderboard = await response.json();
+            document.getElementById('leaderboardList').innerHTML = leaderboard.map((u, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${u.username}</td>
+                    <td>${u.solved_problems}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Submit solution
+        document.getElementById('submitForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const code = editor.getValue();
+            const language = document.getElementById('language').value;
+            const problemId = document.getElementById('problemSelect').value;
+
+            if (!problemId) {
+                alert('Please select a problem first');
+                return;
+            }
+
+            try {
+                console.log('Submitting solution:', {
+                    problem_id: parseInt(problemId),
+                    language,
+                    code_length: code.length
+                });
+
+                const response = await fetch('/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        problem_id: parseInt(problemId), 
+                        code, 
+                        language 
+                    })
+                });
+
+                console.log('Response status:', response.status);
+                const responseText = await response.text();
+                console.log('Raw response:', responseText);
+
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('Failed to parse response:', parseError);
+                    alert('Server returned invalid response. Please try again.');
+                    return;
+                }
+
+                if (response.ok) {
+                    alert(`Status: ${result.status}\nTime: ${result.execution_time}ms\nMemory: ${result.memory_used}KB`);
+                    // Refresh all data
+                    await Promise.all([
+                        loadSubmissions(),
+                        loadLeaderboard(),
+                        loadProblems()
+                    ]);
+                } else {
+                    alert(result.error || 'Submission failed');
+                }
+            } catch (error) {
+                console.error('Submission error:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+
+        // Create user (admin only)
+        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('newUsername').value;
+            const email = document.getElementById('newEmail').value;
+            const password = document.getElementById('newPassword').value;
+
+            try {
+                const response = await fetch('/create_user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert('User created successfully');
+                    e.target.reset();
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                alert('An error occurred. Please try again.');
+            }
+        });
+
+        // Create problem (admin only)
+        document.getElementById('createProblemForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Form submitted');
+            
+            try {
+                // Get form data using FormData
+                const form = e.target;
+                const formData = new FormData(form);
+                
+                // Convert FormData to object
+                const data = {
+                    title: formData.get('title')?.trim() || '',
+                    description: formData.get('description')?.trim() || '',
+                    difficulty: formData.get('difficulty') || 'Easy',
+                    time_limit: parseInt(formData.get('time_limit') || '1000'),
+                    memory_limit: parseInt(formData.get('memory_limit') || '256'),
+                    test_cases: Array.from(document.querySelectorAll('.test-case')).map(tc => {
+                        const inputs = tc.querySelectorAll('input');
+                        return {
+                            input: inputs[0]?.value?.trim() || '',
+                            output: inputs[1]?.value?.trim() || ''
+                        };
+                    })
+                };
+
+                console.log('Form data:', data);
+
+                // Validate form data
+                if (!data.title) {
+                    alert('Please enter a title');
+                    return;
+                }
+                if (!data.description) {
+                    alert('Please enter a description');
+                    return;
+                }
+                if (data.test_cases.length === 0) {
+                    alert('Please add at least one test case');
+                    return;
+                }
+                if (data.test_cases.some(tc => !tc.input || !tc.output)) {
+                    alert('Please fill in all test case fields');
+                    return;
+                }
+
+                console.log('Sending request to server...');
+                const response = await fetch('/create_problem', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                console.log('Response status:', response.status);
+                const result = await response.json();
+                console.log('Response data:', result);
+
+                if (response.ok) {
+                    alert('Problem created successfully');
+                    form.reset();
+                    document.getElementById('testCases').innerHTML = `
+                        <div class="test-case mb-2">
+                            <input type="text" class="form-control mb-2" placeholder="Input" required>
+                            <input type="text" class="form-control" placeholder="Output" required>
+                        </div>
+                    `;
+                    loadProblems();
+                } else {
+                    alert(result.error || 'Failed to create problem');
+                }
+            } catch (error) {
+                console.error('Error details:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+
+        // Add test case
+        function addTestCase() {
+            console.log('Adding test case');
+            const testCases = document.getElementById('testCases');
+            const testCase = document.createElement('div');
+            testCase.className = 'test-case mb-2';
+            testCase.innerHTML = `
+                <input type="text" class="form-control mb-2" placeholder="Input" required>
+                <input type="text" class="form-control" placeholder="Output" required>
+            `;
+            testCases.appendChild(testCase);
+        }
+
+        // Check if user is admin
+        async function checkAdmin() {
+            try {
+                console.log('Checking admin status...');
+                const response = await fetch('/check_admin');
+                if (!response.ok) {
+                    console.error('Admin check failed:', response.status);
+                    return;
+                }
+                
+                const data = await response.json();
+                console.log('Admin check response:', data);
+                
+                const adminElements = document.querySelectorAll('.admin-only');
+                if (data.is_admin) {
+                    console.log('User is admin, showing admin tab');
+                    adminElements.forEach(el => {
+                        el.style.display = 'block';
+                    });
+                } else {
+                    console.log('User is not admin');
+                    adminElements.forEach(el => {
+                        el.style.display = 'none';
+                    });
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, initializing...');
+            
+            // Initialize form fields
+            const form = document.getElementById('createProblemForm');
+            if (form) {
+                console.log('Form found, initializing fields...');
+                // Set default values
+                form.querySelector('[name="time_limit"]').value = '1000';
+                form.querySelector('[name="memory_limit"]').value = '256';
+                form.querySelector('[name="difficulty"]').value = 'Easy';
+                
+                // Initialize test cases
+                const testCases = document.getElementById('testCases');
+                if (testCases) {
+                    testCases.innerHTML = `
+                        <div class="test-case mb-2">
+                            <input type="text" class="form-control mb-2" placeholder="Input" required>
+                            <input type="text" class="form-control" placeholder="Output" required>
+                        </div>
+                    `;
+                }
+            } else {
+                console.error('Form not found!');
+            }
+            
+            loadProblems();
+            loadSubmissions();
+            loadLeaderboard();
+            checkAdmin();
+        });
+    </script>
+</body>
+</html> 
