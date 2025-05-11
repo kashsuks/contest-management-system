@@ -315,14 +315,27 @@
                                                                 <input type="number" class="form-control" name="memory_limit" value="256" required>
                                                             </div>
                                                             <div class="mb-3">
-                                                                <label class="form-label">Test Cases</label>
-                                                                <div id="testCases">
-                                                                    <div class="test-case mb-2">
-                                                                        <input type="text" class="form-control mb-2" placeholder="Input" required>
-                                                                        <input type="text" class="form-control" placeholder="Output" required>
+                                                                <label class="form-label">Batches</label>
+                                                                <div id="batches">
+                                                                    <div class="batch mb-4">
+                                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                            <h6>Batch 1</h6>
+                                                                            <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
+                                                                        </div>
+                                                                        <div class="mb-2">
+                                                                            <label class="form-label">Points</label>
+                                                                            <input type="number" class="form-control" name="batch_points" value="10" required>
+                                                                        </div>
+                                                                        <div class="test-cases">
+                                                                            <div class="test-case mb-2">
+                                                                                <input type="text" class="form-control mb-2" placeholder="Input" required>
+                                                                                <input type="text" class="form-control" placeholder="Output" required>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button type="button" class="btn btn-secondary btn-sm" onclick="addTestCase(this)">Add Test Case</button>
                                                                     </div>
                                                                 </div>
-                                                                <button type="button" class="btn btn-secondary" onclick="addTestCase()">Add Test Case</button>
+                                                                <button type="button" class="btn btn-secondary" onclick="addBatch()">Add Batch</button>
                                                             </div>
                                                             <button type="submit" class="btn btn-primary">Create Problem</button>
                                                         </form>
@@ -526,7 +539,7 @@
                 }
 
                 if (response.ok) {
-                    alert(`Status: ${result.status}\nTime: ${result.execution_time}ms\nMemory: ${result.memory_used}KB`);
+                    alert(`Status: ${result.status}\nPoints Earned: ${result.points_earned}\nTime: ${result.execution_time}ms\nMemory: ${result.memory_used}KB`);
                     // Refresh all data
                     await Promise.all([
                         loadSubmissions(),
@@ -585,11 +598,18 @@
                     difficulty: formData.get('difficulty') || 'Easy',
                     time_limit: parseInt(formData.get('time_limit') || '1000'),
                     memory_limit: parseInt(formData.get('memory_limit') || '256'),
-                    test_cases: Array.from(document.querySelectorAll('.test-case')).map(tc => {
-                        const inputs = tc.querySelectorAll('input');
+                    batches: Array.from(document.querySelectorAll('.batch')).map(batch => {
+                        const points = parseInt(batch.querySelector('[name="batch_points"]').value);
+                        const testCases = Array.from(batch.querySelectorAll('.test-case')).map(tc => {
+                            const inputs = tc.querySelectorAll('input');
+                            return {
+                                input: inputs[0]?.value?.trim() || '',
+                                output: inputs[1]?.value?.trim() || ''
+                            };
+                        });
                         return {
-                            input: inputs[0]?.value?.trim() || '',
-                            output: inputs[1]?.value?.trim() || ''
+                            points: points,
+                            test_cases: testCases
                         };
                     })
                 };
@@ -605,11 +625,15 @@
                     alert('Please enter a description');
                     return;
                 }
-                if (data.test_cases.length === 0) {
-                    alert('Please add at least one test case');
+                if (data.batches.length === 0) {
+                    alert('Please add at least one batch');
                     return;
                 }
-                if (data.test_cases.some(tc => !tc.input || !tc.output)) {
+                if (data.batches.some(batch => batch.test_cases.length === 0)) {
+                    alert('Each batch must have at least one test case');
+                    return;
+                }
+                if (data.batches.some(batch => batch.test_cases.some(tc => !tc.input || !tc.output))) {
                     alert('Please fill in all test case fields');
                     return;
                 }
@@ -628,10 +652,23 @@
                 if (response.ok) {
                     alert('Problem created successfully');
                     form.reset();
-                    document.getElementById('testCases').innerHTML = `
-                        <div class="test-case mb-2">
-                            <input type="text" class="form-control mb-2" placeholder="Input" required>
-                            <input type="text" class="form-control" placeholder="Output" required>
+                    document.getElementById('batches').innerHTML = `
+                        <div class="batch mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6>Batch 1</h6>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Points</label>
+                                <input type="number" class="form-control" name="batch_points" value="10" required>
+                            </div>
+                            <div class="test-cases">
+                                <div class="test-case mb-2">
+                                    <input type="text" class="form-control mb-2" placeholder="Input" required>
+                                    <input type="text" class="form-control" placeholder="Output" required>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="addTestCase(this)">Add Test Case</button>
                         </div>
                     `;
                     loadProblems();
@@ -644,10 +681,46 @@
             }
         });
 
-        // Add test case
-        function addTestCase() {
-            console.log('Adding test case');
-            const testCases = document.getElementById('testCases');
+        // Add batch
+        function addBatch() {
+            const batches = document.getElementById('batches');
+            const batchCount = batches.children.length + 1;
+            const batch = document.createElement('div');
+            batch.className = 'batch mb-4';
+            batch.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6>Batch ${batchCount}</h6>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Points</label>
+                    <input type="number" class="form-control" name="batch_points" value="10" required>
+                </div>
+                <div class="test-cases">
+                    <div class="test-case mb-2">
+                        <input type="text" class="form-control mb-2" placeholder="Input" required>
+                        <input type="text" class="form-control" placeholder="Output" required>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addTestCase(this)">Add Test Case</button>
+            `;
+            batches.appendChild(batch);
+        }
+
+        // Remove batch
+        function removeBatch(button) {
+            const batch = button.closest('.batch');
+            batch.remove();
+            // Update batch numbers
+            const batches = document.getElementById('batches');
+            Array.from(batches.children).forEach((batch, index) => {
+                batch.querySelector('h6').textContent = `Batch ${index + 1}`;
+            });
+        }
+
+        // Add test case to a specific batch
+        function addTestCase(button) {
+            const testCases = button.previousElementSibling;
             const testCase = document.createElement('div');
             testCase.className = 'test-case mb-2';
             testCase.innerHTML = `

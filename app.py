@@ -39,7 +39,7 @@ class Problem(db.Model):
     difficulty = db.Column(db.String(20), nullable=False)
     time_limit = db.Column(db.Integer, nullable=False)  # in milliseconds
     memory_limit = db.Column(db.Integer, nullable=False)  # in MB
-    test_cases = db.Column(db.JSON, nullable=False)
+    batches = db.Column(db.JSON, nullable=False)  # List of batches, each containing test cases and points
     submissions = db.relationship('Submission', backref='problem', lazy=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -52,6 +52,7 @@ class Submission(db.Model):
     status = db.Column(db.String(20), nullable=False)
     execution_time = db.Column(db.Float)  # in milliseconds
     memory_used = db.Column(db.Float)  # in KB
+    points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 @login_manager.user_loader
@@ -143,7 +144,7 @@ def create_problem():
         data = request.get_json()
         print("Received data:", data)  # Debug print
         
-        required_fields = ['title', 'description', 'difficulty', 'time_limit', 'memory_limit', 'test_cases']
+        required_fields = ['title', 'description', 'difficulty', 'time_limit', 'memory_limit', 'batches']
         
         # Validate required fields
         for field in required_fields:
@@ -151,15 +152,24 @@ def create_problem():
                 print(f"Missing field: {field}")  # Debug print
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
-        # Validate test cases
-        if not isinstance(data['test_cases'], list) or len(data['test_cases']) == 0:
-            print("Invalid test cases")  # Debug print
-            return jsonify({'error': 'At least one test case is required'}), 400
+        # Validate batches
+        if not isinstance(data['batches'], list) or len(data['batches']) == 0:
+            print("Invalid batches")  # Debug print
+            return jsonify({'error': 'At least one batch is required'}), 400
         
-        for test_case in data['test_cases']:
-            if 'input' not in test_case or 'output' not in test_case:
-                print("Invalid test case format")  # Debug print
-                return jsonify({'error': 'Each test case must have input and output'}), 400
+        for batch in data['batches']:
+            if 'points' not in batch or 'test_cases' not in batch:
+                print("Invalid batch format")  # Debug print
+                return jsonify({'error': 'Each batch must have points and test_cases'}), 400
+            
+            if not isinstance(batch['test_cases'], list) or len(batch['test_cases']) == 0:
+                print("Invalid test cases in batch")  # Debug print
+                return jsonify({'error': 'Each batch must have at least one test case'}), 400
+            
+            for test_case in batch['test_cases']:
+                if 'input' not in test_case or 'output' not in test_case:
+                    print("Invalid test case format")  # Debug print
+                    return jsonify({'error': 'Each test case must have input and output'}), 400
         
         problem = Problem(
             title=data['title'],
@@ -167,7 +177,7 @@ def create_problem():
             difficulty=data['difficulty'],
             time_limit=data['time_limit'],
             memory_limit=data['memory_limit'],
-            test_cases=data['test_cases']
+            batches=data['batches']
         )
         
         db.session.add(problem)
@@ -202,7 +212,8 @@ def get_problem(problem_id):
         'description': problem.description,
         'difficulty': problem.difficulty,
         'time_limit': problem.time_limit,
-        'memory_limit': problem.memory_limit
+        'memory_limit': problem.memory_limit,
+        'batches': problem.batches
     })
 
 @app.route('/submit', methods=['POST'])
@@ -240,7 +251,7 @@ def submit():
             result = judge_submission(
                 code=data['code'],
                 language=data['language'],
-                test_cases=problem.test_cases,
+                batches=problem.batches,
                 time_limit=problem.time_limit,
                 memory_limit=problem.memory_limit
             )
@@ -249,6 +260,7 @@ def submit():
             submission.status = result['status']
             submission.execution_time = result.get('execution_time')
             submission.memory_used = result.get('memory_used')
+            submission.points_earned = result.get('points_earned', 0)
             
             # If this is the first successful submission for this problem by this user
             if result['status'] == 'AC':
@@ -321,6 +333,8 @@ def check_admin():
 
 if __name__ == '__main__':
     with app.app_context():
+        # Drop all tables and recreate them
+        db.drop_all()
         db.create_all()
         init_admin()  # Initialize admin user
     app.run(host='0.0.0.0', port=5000, debug=True) 

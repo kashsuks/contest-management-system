@@ -127,19 +127,57 @@ def run_code(code: str, language: str, test_case: Dict[str, str], time_limit: in
         except Exception as e:
             return {'status': 'RE', 'error': str(e)}
 
-def judge_submission(code, language, test_cases, time_limit, memory_limit):
-    """Judge a submission against test cases."""
-    # Run against each test case
-    for test_case in test_cases:
-        result = run_code(code, language, test_case, time_limit, memory_limit)
-        
-        if result['status'] != 'AC':
-            return result
+def judge_submission(code, language, batches, time_limit, memory_limit):
+    """Judge a submission against batches of test cases."""
+    total_points = 0
+    max_execution_time = 0
+    max_memory_used = 0
+    batch_results = []
+
+    # Run against each batch
+    for batch in batches:
+        batch_points = batch['points']
+        test_cases = batch['test_cases']
+        batch_passed = True
+        batch_execution_time = 0
+        batch_memory_used = 0
+
+        # Run against each test case in the batch
+        for test_case in test_cases:
+            result = run_code(code, language, test_case, time_limit, memory_limit)
+            
+            if result['status'] != 'AC':
+                batch_passed = False
+                batch_results.append({
+                    'status': result['status'],
+                    'error': result.get('error', ''),
+                    'expected': result.get('expected', ''),
+                    'got': result.get('got', ''),
+                    'execution_time': result.get('execution_time', 0),
+                    'memory_used': result.get('memory_used', 0)
+                })
+                break
+            
+            batch_execution_time = max(batch_execution_time, result.get('execution_time', 0))
+            batch_memory_used = max(batch_memory_used, result.get('memory_used', 0))
+
+        if batch_passed:
+            total_points += batch_points
+            max_execution_time = max(max_execution_time, batch_execution_time)
+            max_memory_used = max(max_memory_used, batch_memory_used)
+            batch_results.append({
+                'status': 'AC',
+                'points': batch_points,
+                'execution_time': batch_execution_time,
+                'memory_used': batch_memory_used
+            })
     
     return {
-        'status': 'AC',
-        'execution_time': result.get('execution_time', 0),
-        'memory_used': result.get('memory_used', 0)
+        'status': 'AC' if total_points > 0 else 'WA',
+        'points_earned': total_points,
+        'execution_time': max_execution_time,
+        'memory_used': max_memory_used,
+        'batch_results': batch_results
     }
 
 def main():
@@ -150,28 +188,18 @@ def main():
         language = os.environ.get('LANGUAGE', '')
         time_limit = int(os.environ.get('TIME_LIMIT', 1000))
         memory_limit = int(os.environ.get('MEMORY_LIMIT', 256))
-        test_cases = json.loads(os.environ.get('TEST_CASES', '[]'))
+        batches = json.loads(os.environ.get('BATCHES', '[]'))
 
-        if not all([code, language, test_cases]):
+        if not all([code, language, batches]):
             print(json.dumps({
                 'status': 'CE',
                 'error': 'Missing required parameters'
             }))
             return
 
-        # Run against all test cases
-        for test_case in test_cases:
-            result = run_code(code, language, test_case, time_limit, memory_limit)
-            if result['status'] != 'AC':
-                print(json.dumps(result))
-                return
-
-        # If all test cases pass
-        print(json.dumps({
-            'status': 'AC',
-            'execution_time': result.get('execution_time', 0),
-            'memory_used': result.get('memory_used', 0)
-        }))
+        # Judge the submission
+        result = judge_submission(code, language, batches, time_limit, memory_limit)
+        print(json.dumps(result))
 
     except Exception as e:
         print(json.dumps({
