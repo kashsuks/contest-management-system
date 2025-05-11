@@ -278,11 +278,27 @@ def submit():
 @app.route('/leaderboard')
 @login_required
 def get_leaderboard():
-    users = User.query.filter_by(is_admin=False).order_by(User.solved_problems.desc()).all()
-    return jsonify([{
-        'username': u.username,
-        'solved_problems': u.solved_problems
-    } for u in users])
+    # Get all users who are not admins
+    users = User.query.filter_by(is_admin=False).all()
+    
+    # Calculate solved problems for each user
+    leaderboard_data = []
+    for user in users:
+        # Count unique problems solved by the user
+        solved_problems = db.session.query(Submission.problem_id)\
+            .filter(Submission.user_id == user.id, Submission.status == 'AC')\
+            .distinct()\
+            .count()
+        
+        leaderboard_data.append({
+            'username': user.username,
+            'solved_problems': solved_problems
+        })
+    
+    # Sort by solved problems in descending order
+    leaderboard_data.sort(key=lambda x: x['solved_problems'], reverse=True)
+    
+    return jsonify(leaderboard_data)
 
 @app.route('/submissions')
 @login_required
