@@ -216,6 +216,7 @@
                                                 <th>Problem</th>
                                                 <th>Language</th>
                                                 <th>Status</th>
+                                                <th>Points</th>
                                                 <th>Time</th>
                                                 <th>Memory</th>
                                                 <th>Submitted</th>
@@ -234,7 +235,8 @@
                                             <tr>
                                                 <th>Rank</th>
                                                 <th>Username</th>
-                                                <th>Solved</th>
+                                                <th>Total Points</th>
+                                                <th id="problemHeaders"></th>
                                             </tr>
                                         </thead>
                                         <tbody id="leaderboardList"></tbody>
@@ -476,6 +478,7 @@
                     <td>${s.problem.title}</td>
                     <td>${s.language}</td>
                     <td><span class="badge bg-${s.status === 'AC' ? 'success' : 'danger'}">${s.status}</span></td>
+                    <td>${s.points_earned}/${s.problem.total_points}</td>
                     <td>${s.execution_time ? s.execution_time.toFixed(2) + 'ms' : '-'}</td>
                     <td>${s.memory_used ? s.memory_used.toFixed(2) + 'KB' : '-'}</td>
                     <td>${new Date(s.submitted_at).toLocaleString()}</td>
@@ -486,12 +489,26 @@
         // Load leaderboard
         async function loadLeaderboard() {
             const response = await fetch('/leaderboard');
-            const leaderboard = await response.json();
-            document.getElementById('leaderboardList').innerHTML = leaderboard.map((u, i) => `
+            const data = await response.json();
+            
+            // Create problem headers
+            const problemHeaders = document.getElementById('problemHeaders');
+            problemHeaders.innerHTML = data.problems.map(p => `
+                <th>${p.title}</th>
+            `).join('');
+            
+            // Create leaderboard rows
+            document.getElementById('leaderboardList').innerHTML = data.users.map((user, i) => `
                 <tr>
                     <td>${i + 1}</td>
-                    <td>${u.username}</td>
-                    <td>${u.solved_problems}</td>
+                    <td>${user.username}</td>
+                    <td>${user.total_points}</td>
+                    ${user.problem_points.map(p => `
+                        <td>
+                            ${p.points}
+                            ${p.execution_time ? `<br><small class="text-muted">${p.execution_time.toFixed(2)}ms</small>` : ''}
+                        </td>
+                    `).join('')}
                 </tr>
             `).join('');
         }
