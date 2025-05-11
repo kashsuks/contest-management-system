@@ -440,7 +440,18 @@
                         <span class="ms-2">Memory Limit: ${problem.memory_limit}MB</span>
                     </div>
                     <div class="problem-description">${problem.description.replace(/\n/g, '<br>')}</div>
+                    <br>
                 `;
+
+                const btn = document.createElement("button");
+                btn.innerText = "Submit Solution";
+                btn.setAttribute("class", "btn btn-primary btn-sm");
+                btn.addEventListener("click", () => {
+                    document.querySelector("a[href='#submit']").click();
+                    const select = document.getElementById("problemSelect");
+                    select.value = `${id}`;
+                });
+                problemContent.appendChild(btn);
                 
                 // Store the problem ID for submission
                 document.getElementById('submitForm').dataset.problemId = id;
