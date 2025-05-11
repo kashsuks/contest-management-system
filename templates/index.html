@@ -181,6 +181,9 @@
                                 <a class="nav-link" data-bs-toggle="tab" href="#submit">Submit</a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#viewSubmission">View Submission</a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#submissions">My Submissions</a>
                             </li>
                             <li class="nav-item">
@@ -240,6 +243,10 @@
                                     </div>
                                     <button type="submit" class="btn btn-primary">Submit</button>
                                 </form>
+                            </div>
+
+                            <!-- View submission -->
+                            <div class="tab-pane fade" id="viewSubmission">
                             </div>
 
                             <!-- Submissions -->
@@ -448,9 +455,14 @@
 
                 const btn = document.createElement("button");
                 btn.innerText = "Submit Solution";
-                btn.setAttribute("class", "btn btn-primary btn-sm");
+                btn.className = "btn btn-primary btn-sm";
                 btn.addEventListener("click", () => {
-                    document.querySelector("a[href='#submit']").click();
+                    const submit = document.querySelector("a[href='#submit']");
+                    if (submit) {
+                        const tab = new bootstrap.Tab(submit);
+                        tab.show();
+                    }
+
                     const select = document.getElementById("problemSelect");
                     select.value = `${id}`;
                 });
@@ -496,6 +508,56 @@
                     <td>${new Date(s.submitted_at).toLocaleString()}</td>
                 </tr>
             `).join('');
+        }
+
+        // Load submission into view tab
+        async function viewSubmission(submission_id) {
+            const response = await fetch(`/submission/${submission_id}`);
+            const submission = await response.json();
+            const viewer = document.getElementById('viewSubmission');
+
+            viewer.innerHTML = `
+                <span>Submitted on: ${new Date(submission.submitted_at).toLocaleString()}</span> <br>
+                <span>Submission for problem: <b>${submission.problem.title}</b></span> <br>
+                <span>Points earned: <b>${submission.points_earned}/${submission.problem.total_points}</b></span> <br><br>
+            `;
+
+            let batch_num = 1;
+            let testcase_num = 1;
+            for (const batch of submission.batch_results) {
+                const status = batch.status;
+                const div = document.createElement('div');
+                div.className = 'mb-3';
+                div.innerHTML = `
+                    <span display="font-size: .83em; font-weight: bold;">Batch ${batch_num}:</span>
+                    <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span>
+                    <br>
+                `;
+
+                for (const test_case of batch.test_case_results) {
+                    const status = test_case.status;
+                    const indent = '<span style="display: inline-block; width: 2ch;">&#9;</span>';
+                    div.innerHTML += `
+                        ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span></span>
+                    `;
+                    if (status != "skip") {
+                        div.innerHTML += `
+                            ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}MB]</span>
+                        `;
+                    }
+                    div.innerHTML += '<br>';
+                    testcase_num++;
+                }
+
+                viewer.appendChild(div);
+                batch_num++;
+            }
+
+            const viewProblem = document.querySelector('a[href="#viewSubmission"]');
+            if (viewProblem) {
+                const tab = new bootstrap.Tab(viewProblem);
+                tab.show();
+            }
         }
 
         // Load leaderboard
@@ -579,12 +641,13 @@
                 }
 
                 if (response.ok) {
-                    alert(`Status: ${result.status}\nPoints Earned: ${result.points_earned}\nTime: ${result.execution_time}ms\nMemory: ${result.memory_used}KB`);
+                    // alert(`Status: ${result.status}\nPoints Earned: ${result.points_earned}\nTime: ${result.execution_time}ms\nMemory: ${result.memory_used}KB`);
                     // Refresh all data
                     await Promise.all([
                         loadSubmissions(),
                         loadLeaderboard(),
-                        loadProblems()
+                        loadProblems(),
+                        viewSubmission(result.id)
                     ]);
                 } else {
                     alert(result.error || 'Submission failed');
