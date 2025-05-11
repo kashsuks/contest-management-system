@@ -322,10 +322,10 @@
                                                                     <div class="batch mb-4">
                                                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                                                             <h6>Batch 1</h6>
-                                                                            <button type="button" class="btn btn-danger btn-sm" onclick="toggleBatch(1)">Toggle visibility</button>
+                                                                            <button type="button" class="btn btn-danger btn-sm batch-visibility-btn" onclick="toggleBatch(1)">Toggle visibility</button>
                                                                             <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
                                                                         </div>
-                                                                        <div class="mb-2" id="batch-1-points">
+                                                                        <div class="mb-2 batch-points" id="batch-1-points">
                                                                             <label class="form-label">Points</label>
                                                                             <input type="number" class="form-control" name="batch_points" value="10" required>
                                                                         </div>
@@ -335,7 +335,7 @@
                                                                                 <input type="text" class="form-control" placeholder="Output" required>
                                                                             </div>
                                                                         </div>
-                                                                        <button type="button" class="btn btn-secondary btn-sm" onclick="addTestCase(this)" id="batch-1-btn">Add Test Case</button>
+                                                                        <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)" id="batch-1-btn">Add Test Case</button>
                                                                     </div>
                                                                 </div>
                                                                 <button type="button" class="btn btn-secondary" onclick="addBatch()">Add Batch</button>
@@ -726,7 +726,7 @@
                     <label class="form-label">Points</label>
                     <input type="number" class="form-control" name="batch_points" value="10" required>
                 </div>
-                <div class="test-cases batch-testcases" id="batch-${batchCount}-testcases">
+                <div class="test-cases" id="batch-${batchCount}-testcases">
                     <div class="test-case mb-2">
                         <input type="text" class="form-control mb-2" placeholder="Input" required>
                         <input type="text" class="form-control" placeholder="Output" required>
@@ -759,7 +759,7 @@
                 batch.querySelector('h6').textContent = `Batch ${index + 1}`;
                 batch.querySelector('.batch-visibility-btn').onclick = () => { toggleBatch(index + 1) };
                 batch.querySelector('.batch-points').id = `batch-${index + 1}-points`;
-                batch.querySelector('.batch-testcases').id = `batch-${index + 1}-testcases`;
+                batch.querySelector('.test-cases').id = `batch-${index + 1}-testcases`;
                 batch.querySelector('.batch-add').id = `batch-${index + 1}-btn`;
             });
         }
