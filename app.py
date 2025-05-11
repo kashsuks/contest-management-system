@@ -54,6 +54,7 @@ class Submission(db.Model):
     memory_used = db.Column(db.Float)  # in KB
     points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -236,12 +237,14 @@ def submit():
         problem = Problem.query.get_or_404(data['problem_id'])
         
         # Create submission record
+        count = Submission.query.count()
         submission = Submission(
             user_id=current_user.id,
             problem_id=problem.id,
             code=data['code'],
             language=data['language'],
-            status='PENDING'
+            status='PENDING',
+            id=count
         )
         db.session.add(submission)
         db.session.commit()
@@ -261,6 +264,8 @@ def submit():
             submission.execution_time = result.get('execution_time')
             submission.memory_used = result.get('memory_used')
             submission.points_earned = result.get('points_earned', 0)
+            submission.batch_results = result['batch_results']
+            result['id'] = count
             
             # If this is the first successful submission for this problem by this user
             if result['status'] == 'AC':
@@ -332,10 +337,27 @@ def get_leaderboard():
         'users': leaderboard_data
     })
 
+@app.route('/submission/<int:submission_id>')
+@login_required
+def get_submission(submission_id):
+    submission = Submission.query.filter_by(user_id=current_user.id, id=submission_id).first()
+    return jsonify({
+        'id': submission.id,
+        'user_id': submission.user_id,
+        'problem_id': submission.problem_id,
+        'batch_results': submission.batch_results,
+        'submitted_at': submission.submitted_at.isoformat(),
+        'points_earned': submission.points_earned,
+        'problem': {
+            'title': submission.problem.title,
+            'total_points': sum(batch['points'] for batch in submission.problem.batches)
+        }
+    })
+
 @app.route('/submissions')
 @login_required
 def get_submissions():
-    submissions = Submission.query.filter_by(user_id=current_user.id).order_by(Submission.submitted_at.desc()).all()
+    submissions = Submission.query.filter_by(user_id=current_user.id).order_by(Submission.id).all()
     return jsonify([{
         'id': s.id,
         'problem': {

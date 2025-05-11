@@ -129,7 +129,7 @@ def run_code(code: str, language: str, test_case: Dict[str, str], time_limit: in
 
 def judge_submission(code, language, batches, time_limit, memory_limit):
     """Judge a submission against batches of test cases."""
-    total_points = 0
+    total_earned = 0
     max_execution_time = 0
     max_memory_used = 0
     batch_results = []
@@ -141,41 +141,62 @@ def judge_submission(code, language, batches, time_limit, memory_limit):
         batch_passed = True
         batch_execution_time = 0
         batch_memory_used = 0
+        error = ""
+        
+        current_batch_result = {
+            'status': '',
+            'batch_points': 0,
+            'test_case_results': []
+        }
 
         # Run against each test case in the batch
         for test_case in test_cases:
+            if not batch_passed:
+                current_batch_result['test_case_results'].append({'status': 'skip'})
+                continue
+                
             result = run_code(code, language, test_case, time_limit, memory_limit)
             
             if result['status'] != 'AC':
                 batch_passed = False
-                batch_results.append({
+                error = result['status']
+                
+                # add specific execution time for TLE
+                time_taken = round(result.get('execution_time', 0), 2) if error != 'TLE' else f">{time_limit:.2f}"
+                
+                current_batch_result['test_case_results'].append({
                     'status': result['status'],
                     'error': result.get('error', ''),
                     'expected': result.get('expected', ''),
                     'got': result.get('got', ''),
-                    'execution_time': result.get('execution_time', 0),
+                    'execution_time': time_taken,
                     'memory_used': result.get('memory_used', 0)
                 })
-                break
+            else:
+                current_batch_result['test_case_results'].append({
+                    'status': 'AC',
+                    'execution_time': round(result.get('execution_time', 0), 2),
+                    'memory_used': result.get('memory_used', 0)
+                })
             
             batch_execution_time = max(batch_execution_time, result.get('execution_time', 0))
             batch_memory_used = max(batch_memory_used, result.get('memory_used', 0))
 
         if batch_passed:
-            total_points += batch_points
+            current_batch_result['batch_points'] = batch_points
+            current_batch_result['status'] = 'AC'
+            total_earned += batch_points
             max_execution_time = max(max_execution_time, batch_execution_time)
             max_memory_used = max(max_memory_used, batch_memory_used)
-            batch_results.append({
-                'status': 'AC',
-                'points': batch_points,
-                'execution_time': batch_execution_time,
-                'memory_used': batch_memory_used
-            })
+        else:
+            current_batch_result['status'] = error
+        
+        batch_results.append(current_batch_result)
     
     return {
-        'status': 'AC' if total_points > 0 else 'WA',
-        'points_earned': total_points,
-        'execution_time': max_execution_time,
+        'status': 'AC' if total_earned > 0 else 'WA',
+        'points_earned': total_earned,
+        'execution_time': round(max_execution_time, 2),
         'memory_used': max_memory_used,
         'batch_results': batch_results
     }
