@@ -293,24 +293,44 @@ def get_leaderboard():
     # Get all users who are not admins
     users = User.query.filter_by(is_admin=False).all()
     
-    # Calculate solved problems for each user
+    # Get all problems
+    problems = Problem.query.order_by(Problem.id).all()
+    
+    # Calculate points for each user
     leaderboard_data = []
     for user in users:
-        # Count unique problems solved by the user
-        solved_problems = db.session.query(Submission.problem_id)\
-            .filter(Submission.user_id == user.id, Submission.status == 'AC')\
-            .distinct()\
-            .count()
-        
-        leaderboard_data.append({
+        user_data = {
             'username': user.username,
-            'solved_problems': solved_problems
-        })
+            'total_points': 0,
+            'problem_points': []
+        }
+        
+        # For each problem, find the best submission
+        for problem in problems:
+            best_submission = Submission.query.filter_by(
+                user_id=user.id,
+                problem_id=problem.id,
+                status='AC'
+            ).order_by(Submission.points_earned.desc()).first()
+            
+            points = best_submission.points_earned if best_submission else 0
+            execution_time = best_submission.execution_time if best_submission else None
+            
+            user_data['problem_points'].append({
+                'points': points,
+                'execution_time': execution_time
+            })
+            user_data['total_points'] += points
+        
+        leaderboard_data.append(user_data)
     
-    # Sort by solved problems in descending order
-    leaderboard_data.sort(key=lambda x: x['solved_problems'], reverse=True)
+    # Sort by total points in descending order
+    leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
     
-    return jsonify(leaderboard_data)
+    return jsonify({
+        'problems': [{'id': p.id, 'title': p.title} for p in problems],
+        'users': leaderboard_data
+    })
 
 @app.route('/submissions')
 @login_required
@@ -318,11 +338,15 @@ def get_submissions():
     submissions = Submission.query.filter_by(user_id=current_user.id).order_by(Submission.submitted_at.desc()).all()
     return jsonify([{
         'id': s.id,
-        'problem': {'title': s.problem.title},
+        'problem': {
+            'title': s.problem.title,
+            'total_points': sum(batch['points'] for batch in s.problem.batches)
+        },
         'language': s.language,
         'status': s.status,
         'execution_time': s.execution_time,
         'memory_used': s.memory_used,
+        'points_earned': s.points_earned,
         'submitted_at': s.submitted_at.isoformat()
     } for s in submissions])
 
