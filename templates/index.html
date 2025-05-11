@@ -397,7 +397,7 @@
                 
                 // Update problem list
                 const problemList = document.getElementById('problemList');
-                problemList.innerHTML = problems.map(p => `
+                problemList.innerHTML = problems.sort((a, b) => a.id - b.id).map(p => `
                     <tr>
                         <td>${p.id}</td>
                         <td>${p.title}</td>
