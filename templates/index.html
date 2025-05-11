@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -115,6 +116,40 @@
         }
         .nav-tabs {
             margin-bottom: 1rem;
+        }
+        .markdown-preview {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-top: 1rem;
+            background-color: #f8f9fa;
+        }
+        .markdown-preview h1, .markdown-preview h2, .markdown-preview h3 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .markdown-preview pre {
+            background-color: #f1f1f1;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .markdown-preview code {
+            background-color: #f1f1f1;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+        }
+        .markdown-preview table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1rem 0;
+        }
+        .markdown-preview th, .markdown-preview td {
+            border: 1px solid #ddd;
+            padding: 0.5rem;
+        }
+        .markdown-preview th {
+            background-color: #f5f5f5;
         }
     </style>
 </head>
@@ -234,9 +269,8 @@
                                         <thead>
                                             <tr>
                                                 <th>Rank</th>
-                                                <th>Username</th>
-                                                <th>Total Points</th>
-                                                <th id="problemHeaders"></th>
+                                                <th>User</th>
+                                                <th>Total</th>
                                             </tr>
                                         </thead>
                                         <tbody id="leaderboardList"></tbody>
@@ -287,61 +321,27 @@
                                             <!-- Problems Section -->
                                             <div class="tab-pane fade" id="adminProblems">
                                                 <div class="card">
-                                                    <div class="card-header">
-                                                        <h5 class="mb-0">Create Problem</h5>
+                                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                                        <h5 class="mb-0">Problems</h5>
+                                                        <button class="btn btn-primary" onclick="openProblemCreation()">Create New Problem</button>
                                                     </div>
                                                     <div class="card-body">
-                                                        <form id="createProblemForm">
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Title</label>
-                                                                <input type="text" class="form-control" name="title" required>
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Description</label>
-                                                                <textarea class="form-control" name="description" rows="3" required></textarea>
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Difficulty</label>
-                                                                <select class="form-select" name="difficulty" required>
-                                                                    <option value="Easy">Easy</option>
-                                                                    <option value="Medium">Medium</option>
-                                                                    <option value="Hard">Hard</option>
-                                                                </select>
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Time Limit (ms)</label>
-                                                                <input type="number" class="form-control" name="time_limit" value="1000" required>
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Memory Limit (MB)</label>
-                                                                <input type="number" class="form-control" name="memory_limit" value="256" required>
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Batches</label>
-                                                                <div id="batches">
-                                                                    <div class="batch mb-4">
-                                                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                                                            <h6>Batch 1</h6>
-                                                                            <button type="button" class="btn btn-danger btn-sm batch-visibility-btn" onclick="toggleBatch(this)">Toggle visibility</button>
-                                                                            <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
-                                                                        </div>
-                                                                        <div class="mb-2 batch-points">
-                                                                            <label class="form-label">Points</label>
-                                                                            <input type="number" class="form-control" name="batch_points" value="10" required>
-                                                                        </div>
-                                                                        <div class="test-cases">
-                                                                            <div class="test-case mb-2">
-                                                                                <input type="text" class="form-control mb-2" placeholder="Input" required>
-                                                                                <input type="text" class="form-control" placeholder="Output" required>
-                                                                            </div>
-                                                                        </div>
-                                                                        <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
-                                                                    </div>
-                                                                </div>
-                                                                <button type="button" class="btn btn-secondary" onclick="addBatch()">Add Batch</button>
-                                                            </div>
-                                                            <button type="submit" class="btn btn-primary">Create Problem</button>
-                                                        </form>
+                                                        <div class="table-responsive">
+                                                            <table class="table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>ID</th>
+                                                                        <th>Title</th>
+                                                                        <th>Difficulty</th>
+                                                                        <th>Time Limit</th>
+                                                                        <th>Memory Limit</th>
+                                                                        <th>Actions</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody id="adminProblemList">
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -442,7 +442,7 @@
                         <span class="ms-2">Time Limit: ${problem.time_limit}ms</span>
                         <span class="ms-2">Memory Limit: ${problem.memory_limit}MB</span>
                     </div>
-                    <div class="problem-description">${problem.description.replace(/\n/g, '<br>')}</div>
+                    <div class="problem-description markdown-preview">${marked.parse(problem.description)}</div>
                     <br>
                 `;
 
@@ -500,29 +500,40 @@
 
         // Load leaderboard
         async function loadLeaderboard() {
-            const response = await fetch('/leaderboard');
-            const data = await response.json();
-            
-            // Create problem headers
-            const problemHeaders = document.getElementById('problemHeaders');
-            problemHeaders.innerHTML = data.problems.map(p => `
-                <th>${p.title}</th>
-            `).join('');
-            
-            // Create leaderboard rows
-            document.getElementById('leaderboardList').innerHTML = data.users.map((user, i) => `
-                <tr>
-                    <td>${i + 1}</td>
-                    <td>${user.username}</td>
-                    <td>${user.total_points}</td>
-                    ${user.problem_points.map(p => `
-                        <td>
-                            ${p.points}
-                            ${p.execution_time ? `<br><small class="text-muted">${p.execution_time.toFixed(2)}ms</small>` : ''}
-                        </td>
-                    `).join('')}
-                </tr>
-            `).join('');
+            try {
+                const response = await fetch('/leaderboard');
+                const data = await response.json();
+                
+                const leaderboardTable = document.getElementById('leaderboardTable');
+                const headerRow = `
+                    <tr>
+                        <th>Rank</th>
+                        <th>User</th>
+                        ${data.problems.map(p => `<th>${p.title}</th>`).join('')}
+                        <th>Total</th>
+                    </tr>
+                `;
+                
+                const bodyRows = data.users.map((user, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${user.username}</td>
+                        ${user.problem_points.map(p => `
+                            <td>
+                                ${p.points > 0 ? `
+                                    ${p.points}<br>
+                                    <small class="text-muted">${p.submission_time || ''}</small>
+                                ` : '-'}
+                            </td>
+                        `).join('')}
+                        <td><strong>${user.total_points}</strong></td>
+                    </tr>
+                `).join('');
+                
+                leaderboardTable.innerHTML = headerRow + bodyRows;
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+            }
         }
 
         // Submit solution
@@ -610,167 +621,36 @@
             }
         });
 
-        // Create problem (admin only)
-        document.getElementById('createProblemForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            console.log('Form submitted');
-            
+        // Function to load admin problems
+        async function loadAdminProblems() {
             try {
-                // Get form data using FormData
-                const form = e.target;
-                const formData = new FormData(form);
+                const response = await fetch('/problems');
+                const problems = await response.json();
                 
-                // Convert FormData to object
-                const data = {
-                    title: formData.get('title')?.trim() || '',
-                    description: formData.get('description')?.trim() || '',
-                    difficulty: formData.get('difficulty') || 'Easy',
-                    time_limit: parseInt(formData.get('time_limit') || '1000'),
-                    memory_limit: parseInt(formData.get('memory_limit') || '256'),
-                    batches: Array.from(document.querySelectorAll('.batch')).map(batch => {
-                        const points = parseInt(batch.querySelector('[name="batch_points"]').value);
-                        const testCases = Array.from(batch.querySelectorAll('.test-case')).map(tc => {
-                            const inputs = tc.querySelectorAll('input');
-                            return {
-                                input: inputs[0]?.value?.trim() || '',
-                                output: inputs[1]?.value?.trim() || ''
-                            };
-                        });
-                        return {
-                            points: points,
-                            test_cases: testCases
-                        };
-                    })
-                };
-
-                console.log('Form data:', data);
-
-                // Validate form data
-                if (!data.title) {
-                    alert('Please enter a title');
-                    return;
-                }
-                if (!data.description) {
-                    alert('Please enter a description');
-                    return;
-                }
-                if (data.batches.length === 0) {
-                    alert('Please add at least one batch');
-                    return;
-                }
-                if (data.batches.some(batch => batch.test_cases.length === 0)) {
-                    alert('Each batch must have at least one test case');
-                    return;
-                }
-                if (data.batches.some(batch => batch.test_cases.some(tc => !tc.input || !tc.output))) {
-                    alert('Please fill in all test case fields');
-                    return;
-                }
-
-                console.log('Sending request to server...');
-                const response = await fetch('/create_problem', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-
-                console.log('Response status:', response.status);
-                const result = await response.json();
-                console.log('Response data:', result);
-
-                if (response.ok) {
-                    alert('Problem created successfully');
-                    form.reset();
-                    document.getElementById('batches').innerHTML = `
-                        <div class="batch mb-4">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h6>Batch 1</h6>
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">Points</label>
-                                <input type="number" class="form-control" name="batch_points" value="10" required>
-                            </div>
-                            <div class="test-cases">
-                                <div class="test-case mb-2">
-                                    <input type="text" class="form-control mb-2" placeholder="Input" required>
-                                    <input type="text" class="form-control" placeholder="Output" required>
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="addTestCase(this)">Add Test Case</button>
-                        </div>
-                    `;
-                    loadProblems();
-                } else {
-                    alert(result.error || 'Failed to create problem');
-                }
+                const adminProblemList = document.getElementById('adminProblemList');
+                adminProblemList.innerHTML = problems.sort((a, b) => a.id - b.id).map(p => `
+                    <tr>
+                        <td>${p.id}</td>
+                        <td>${p.title}</td>
+                        <td>${p.difficulty}</td>
+                        <td>${p.time_limit}ms</td>
+                        <td>${p.memory_limit}MB</td>
+                        <td>
+                            <button class="btn btn-primary btn-sm" onclick="loadProblem(${p.id})">View</button>
+                        </td>
+                    </tr>
+                `).join('');
             } catch (error) {
-                console.error('Error details:', error);
-                alert('An error occurred. Please try again.');
-            }
-        });
-
-        // Add batch
-        function addBatch() {
-            const batches = document.getElementById('batches');
-            const batchCount = batches.children.length + 1;
-            const batch = document.createElement('div');
-            batch.className = 'batch mb-4';
-            batch.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6>Batch ${batchCount}</h6>
-                    <button type="button" class="btn btn-danger btn-sm batch-visibility-btn" onclick="toggleBatch(this)">Toggle Visibility</button>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
-                </div>
-                <div class="mb-2 batch-points">
-                    <label class="form-label">Points</label>
-                    <input type="number" class="form-control" name="batch_points" value="10" required>
-                </div>
-                <div class="test-cases">
-                    <div class="test-case mb-2">
-                        <input type="text" class="form-control mb-2" placeholder="Input" required>
-                        <input type="text" class="form-control" placeholder="Output" required>
-                    </div>
-                </div>
-                <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
-            `;
-            batches.appendChild(batch);
-        }
-
-        // Toggle visibility of batch
-        function toggleBatch(button) {
-            const batch = button.closest('.batch')
-            const toHide = [
-                batch.querySelector('.batch-points'),
-                batch.querySelector('.test-cases'),
-                batch.querySelector('.batch-add')
-            ];
-            for (const elem of toHide) {
-                elem.classList.toggle("d-none")
+                console.error('Error loading admin problems:', error);
             }
         }
 
-        // Remove batch
-        function removeBatch(button) {
-            const batch = button.closest('.batch');
-            batch.remove();
-            // Update batch numbers
-            const batches = document.getElementById('batches');
-            Array.from(batches.children).forEach((batch, index) => {
-                batch.querySelector('h6').textContent = `Batch ${index + 1}`;
+        // Update the openProblemCreation function to refresh admin problems after creation
+        function openProblemCreation() {
+            const newWindow = window.open('/problem_creation.html', '_blank');
+            newWindow.addEventListener('unload', () => {
+                loadAdminProblems();
             });
-        }
-
-        // Add test case to a specific batch
-        function addTestCase(button) {
-            const testCases = button.previousElementSibling;
-            const testCase = document.createElement('div');
-            testCase.className = 'test-case mb-2';
-            testCase.innerHTML = `
-                <input type="text" class="form-control mb-2" placeholder="Input" required>
-                <input type="text" class="form-control" placeholder="Output" required>
-            `;
-            testCases.appendChild(testCase);
         }
 
         // Check if user is admin
@@ -834,7 +714,8 @@
             loadSubmissions();
             loadLeaderboard();
             checkAdmin();
+            loadAdminProblems();
         });
     </script>
 </body>
-</html> 
+</html>
