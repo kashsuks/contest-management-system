@@ -314,11 +314,11 @@ def get_leaderboard():
             ).order_by(Submission.points_earned.desc()).first()
             
             points = best_submission.points_earned if best_submission else 0
-            execution_time = best_submission.execution_time if best_submission else None
+            submission_time = best_submission.submitted_at if best_submission else None
             
             user_data['problem_points'].append({
                 'points': points,
-                'execution_time': execution_time
+                'submission_time': submission_time.strftime('%H:%M:%S') if submission_time else None
             })
             user_data['total_points'] += points
         
@@ -354,6 +354,13 @@ def get_submissions():
 @login_required
 def check_admin():
     return jsonify({'is_admin': current_user.is_admin})
+
+@app.route('/problem_creation.html')
+@login_required
+def problem_creation():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    return render_template('problem_creation.html')
 
 if __name__ == '__main__':
     with app.app_context():
