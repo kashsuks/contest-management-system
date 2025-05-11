@@ -140,6 +140,9 @@
                                 <a class="nav-link active" data-bs-toggle="tab" href="#problems">Problems</a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#problemDetails">Problem Details</a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#submit">Submit</a>
                             </li>
                             <li class="nav-item">
@@ -176,10 +179,7 @@
 
                             <!-- Problem Details -->
                             <div class="tab-pane fade" id="problemDetails">
-                                <div id="problemContent">
-                                    <h3 id="problemTitle"></h3>
-                                    <div id="problemDescription"></div>
-                                </div>
+                                <div id="problemContent"></div>
                             </div>
 
                             <!-- Submit Solution -->
@@ -410,16 +410,48 @@
 
         // Load problem details
         async function loadProblem(id) {
-            const response = await fetch(`/problem/${id}`);
-            const problem = await response.json();
-            document.getElementById('problemTitle').textContent = problem.title;
-            document.getElementById('problemDescription').innerHTML = problem.description.replace(/\n/g, '<br>');
-            
-            // Store the problem ID for submission
-            document.getElementById('submitForm').dataset.problemId = id;
-            
-            // Switch to problem details tab
-            document.querySelector('a[href="#problemDetails"]').click();
+            try {
+                const response = await fetch(`/problem/${id}`);
+                const problem = await response.json();
+                
+                // Create problem details content
+                const problemContent = document.getElementById('problemContent');
+                problemContent.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3>${problem.title}</h3>
+                        <button class="btn btn-secondary" onclick="showProblemsList()">Back to Problems</button>
+                    </div>
+                    <div class="mb-3">
+                        <span class="badge bg-${problem.difficulty === 'Easy' ? 'success' : problem.difficulty === 'Medium' ? 'warning' : 'danger'}">${problem.difficulty}</span>
+                        <span class="ms-2">Time Limit: ${problem.time_limit}ms</span>
+                        <span class="ms-2">Memory Limit: ${problem.memory_limit}MB</span>
+                    </div>
+                    <div class="problem-description">${problem.description.replace(/\n/g, '<br>')}</div>
+                `;
+                
+                // Store the problem ID for submission
+                document.getElementById('submitForm').dataset.problemId = id;
+                document.getElementById('problemSelect').value = id;
+                
+                // Switch to problem details tab
+                const problemDetailsTab = document.querySelector('a[href="#problemDetails"]');
+                if (problemDetailsTab) {
+                    const tab = new bootstrap.Tab(problemDetailsTab);
+                    tab.show();
+                }
+            } catch (error) {
+                console.error('Error loading problem:', error);
+                alert('Failed to load problem details. Please try again.');
+            }
+        }
+
+        // Show problems list
+        function showProblemsList() {
+            const problemsTab = document.querySelector('a[href="#problems"]');
+            if (problemsTab) {
+                const tab = new bootstrap.Tab(problemsTab);
+                tab.show();
+            }
         }
 
         // Load submissions
