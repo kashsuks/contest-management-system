@@ -517,9 +517,9 @@
             const viewer = document.getElementById('viewSubmission');
 
             viewer.innerHTML = `
-                <span>Submitted on: ${new Date(submission.submitted_at).toLocaleString()}</span> <br>
-                <span>Submission for problem: <b>${submission.problem.title}</b></span> <br>
-                <span>Points earned: <b>${submission.points_earned}/${submission.problem.total_points}</b></span> <br><br>
+                <span><b>Submitted on</b>: ${new Date(submission.submitted_at).toLocaleString()}</span> <br>
+                <span><b>Submission for problem</b>: ${submission.problem.title}</span> <br>
+                <span><b>Points earned</b>: ${submission.points_earned}/${submission.problem.total_points}</span> <br><br>
             `;
 
             let batch_num = 1;
