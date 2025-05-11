@@ -245,73 +245,89 @@
                             <!-- Admin Panel -->
                             <div class="tab-pane fade" id="admin">
                                 <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="card mb-3">
-                                            <div class="card-header">
-                                                <h5 class="mb-0">Create User</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <form id="createUserForm">
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Username</label>
-                                                        <input type="text" class="form-control" id="newUsername" required>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Email</label>
-                                                        <input type="email" class="form-control" id="newEmail" required>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Password</label>
-                                                        <input type="password" class="form-control" id="newPassword" required>
-                                                    </div>
-                                                    <button type="submit" class="btn btn-primary">Create User</button>
-                                                </form>
-                                            </div>
+                                    <!-- Admin Sidebar -->
+                                    <div class="col-md-3">
+                                        <div class="list-group">
+                                            <a href="#adminUsers" class="list-group-item list-group-item-action active" data-bs-toggle="list">Users</a>
+                                            <a href="#adminProblems" class="list-group-item list-group-item-action" data-bs-toggle="list">Problems</a>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="card">
-                                            <div class="card-header">
-                                                <h5 class="mb-0">Create Problem</h5>
-                                            </div>
-                                            <div class="card-body">
-                                                <form id="createProblemForm">
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Title</label>
-                                                        <input type="text" class="form-control" name="title" required>
+                                    
+                                    <!-- Admin Content -->
+                                    <div class="col-md-9">
+                                        <div class="tab-content">
+                                            <!-- Users Section -->
+                                            <div class="tab-pane fade show active" id="adminUsers">
+                                                <div class="card">
+                                                    <div class="card-header">
+                                                        <h5 class="mb-0">Create User</h5>
                                                     </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Description</label>
-                                                        <textarea class="form-control" name="description" rows="3" required></textarea>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Difficulty</label>
-                                                        <select class="form-select" name="difficulty" required>
-                                                            <option value="Easy">Easy</option>
-                                                            <option value="Medium">Medium</option>
-                                                            <option value="Hard">Hard</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Time Limit (ms)</label>
-                                                        <input type="number" class="form-control" name="time_limit" value="1000" required>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Memory Limit (MB)</label>
-                                                        <input type="number" class="form-control" name="memory_limit" value="256" required>
-                                                    </div>
-                                                    <div class="mb-3">
-                                                        <label class="form-label">Test Cases</label>
-                                                        <div id="testCases">
-                                                            <div class="test-case mb-2">
-                                                                <input type="text" class="form-control mb-2" placeholder="Input" required>
-                                                                <input type="text" class="form-control" placeholder="Output" required>
+                                                    <div class="card-body">
+                                                        <form id="createUserForm">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Username</label>
+                                                                <input type="text" class="form-control" id="newUsername" required>
                                                             </div>
-                                                        </div>
-                                                        <button type="button" class="btn btn-secondary" onclick="addTestCase()">Add Test Case</button>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Email</label>
+                                                                <input type="email" class="form-control" id="newEmail" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Password</label>
+                                                                <input type="password" class="form-control" id="newPassword" required>
+                                                            </div>
+                                                            <button type="submit" class="btn btn-primary">Create User</button>
+                                                        </form>
                                                     </div>
-                                                    <button type="submit" class="btn btn-primary">Create Problem</button>
-                                                </form>
+                                                </div>
+                                            </div>
+
+                                            <!-- Problems Section -->
+                                            <div class="tab-pane fade" id="adminProblems">
+                                                <div class="card">
+                                                    <div class="card-header">
+                                                        <h5 class="mb-0">Create Problem</h5>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <form id="createProblemForm">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Title</label>
+                                                                <input type="text" class="form-control" name="title" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Description</label>
+                                                                <textarea class="form-control" name="description" rows="3" required></textarea>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Difficulty</label>
+                                                                <select class="form-select" name="difficulty" required>
+                                                                    <option value="Easy">Easy</option>
+                                                                    <option value="Medium">Medium</option>
+                                                                    <option value="Hard">Hard</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Time Limit (ms)</label>
+                                                                <input type="number" class="form-control" name="time_limit" value="1000" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Memory Limit (MB)</label>
+                                                                <input type="number" class="form-control" name="memory_limit" value="256" required>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Test Cases</label>
+                                                                <div id="testCases">
+                                                                    <div class="test-case mb-2">
+                                                                        <input type="text" class="form-control mb-2" placeholder="Input" required>
+                                                                        <input type="text" class="form-control" placeholder="Output" required>
+                                                                    </div>
+                                                                </div>
+                                                                <button type="button" class="btn btn-secondary" onclick="addTestCase()">Add Test Case</button>
+                                                            </div>
+                                                            <button type="submit" class="btn btn-primary">Create Problem</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
