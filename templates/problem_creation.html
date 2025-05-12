@@ -75,9 +75,10 @@
                 <div class="batch mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6>Batch 1</h6>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="toggleBatch(this)">Toggle Visibility</button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
                     </div>
-                    <div class="mb-2">
+                    <div class="mb-2 batch-points">
                         <label class="form-label">Points</label>
                         <input type="number" class="form-control" name="batch_points" value="10" required>
                     </div>
@@ -87,7 +88,7 @@
                             <input type="text" class="form-control" placeholder="Output" required>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="addTestCase(this)">Add Test Case</button>
+                    <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
                 </div>
             </div>
             <button type="button" class="btn btn-secondary mb-3" onclick="addBatch()">Add Batch</button>
@@ -115,8 +116,36 @@
             const batchCount = batches.children.length + 1;
             const newBatch = document.createElement("div");
             newBatch.className = "batch mb-4";
-            newBatch.innerHTML = '<div class="d-flex justify-content-between align-items-center mb-2"><h6>Batch ' + batchCount + '</h6><button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button></div><div class="mb-2"><label class="form-label">Points</label><input type="number" class="form-control" name="batch_points" value="10" required></div><div class="test-cases"><div class="test-case mb-2"><input type="text" class="form-control mb-2" placeholder="Input" required><input type="text" class="form-control" placeholder="Output" required></div></div><button type="button" class="btn btn-secondary btn-sm" onclick="addTestCase(this)">Add Test Case</button>';
+            newBatch.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6>Batch ${batchCount}</h6>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="toggleBatch(this)">Toggle Visibility</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
+                </div>
+                <div class="mb-2 batch-points">
+                    <label class="form-label">Points</label>
+                    <input type="number" class="form-control" name="batch_points" value="10" required>
+                </div>
+                <div class="test-cases">
+                    <div class="test-case mb-2">
+                        <input type="text" class="form-control mb-2" placeholder="Input" required>
+                        <input type="text" class="form-control" placeholder="Output" required>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>`;
             batches.appendChild(newBatch);
+        }
+
+        function toggleBatch(button) {
+            const batch = button.closest('.batch')
+            const toHide = [
+                batch.querySelector('.batch-points'),
+                batch.querySelector('.test-cases'),
+                batch.querySelector('.batch-add')
+            ];
+            for (const elem of toHide) {
+                elem.classList.toggle("d-none")
+            }
         }
 
         function removeBatch(button) {
@@ -126,6 +155,12 @@
             } else {
                 alert("Cannot remove the last batch");
             }
+
+            // Update batch numbers
+            const batches = document.getElementById('batches');
+            Array.from(batches.children).forEach((batch, index) => {
+                batch.querySelector('h6').textContent = `Batch ${index + 1}`;
+            });
         }
 
         document.getElementById("createProblemForm").addEventListener("submit", async (e) => {
