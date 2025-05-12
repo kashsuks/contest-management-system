@@ -12,6 +12,16 @@ app.config['SECRET_KEY'] = 'key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Load contest configuration
+def load_contest_config():
+    try:
+        with open('config/contest_config.json', 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {'contest_name': 'Coding Contest'}  # Default name
+
+contest_config = load_contest_config()
+
 db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -384,6 +394,31 @@ def problem_creation():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
     return render_template('problem_creation.html')
+
+@app.route('/contest_settings')
+@login_required
+def get_contest_settings():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    return jsonify(contest_config)
+
+@app.route('/update_contest_settings', methods=['POST'])
+@login_required
+def update_contest_settings():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    if 'contest_name' not in data:
+        return jsonify({'error': 'Contest name is required'}), 400
+    
+    contest_config['contest_name'] = data['contest_name']
+    
+    # Save to config file
+    with open('config/contest_config.json', 'w') as f:
+        json.dump(contest_config, f, indent=4)
+    
+    return jsonify({'message': 'Settings updated successfully'})
 
 if __name__ == '__main__':
     with app.app_context():
