@@ -293,6 +293,7 @@
                                         <div class="list-group">
                                             <a href="#adminUsers" class="list-group-item list-group-item-action active" data-bs-toggle="list">Users</a>
                                             <a href="#adminProblems" class="list-group-item list-group-item-action" data-bs-toggle="list">Problems</a>
+                                            <a href="#adminSettings" class="list-group-item list-group-item-action" data-bs-toggle="list">Settings</a>
                                         </div>
                                     </div>
                                     
@@ -349,6 +350,24 @@
                                                                 </tbody>
                                                             </table>
                                                         </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Settings Section -->
+                                            <div class="tab-pane fade" id="adminSettings">
+                                                <div class="card">
+                                                    <div class="card-header">
+                                                        <h5 class="mb-0">Contest Settings</h5>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <form id="contestSettingsForm">
+                                                            <div class="mb-3">
+                                                                <label class="form-label">Contest Name</label>
+                                                                <input type="text" class="form-control" id="contestName" required>
+                                                            </div>
+                                                            <button type="submit" class="btn btn-primary">Save Settings</button>
+                                                        </form>
                                                     </div>
                                                 </div>
                                             </div>
@@ -578,13 +597,23 @@
                     <th>Total</th>
                 `;
                 
+                // Track first solves for each problem
+                const firstSolves = {};
+                data.users.forEach(user => {
+                    user.problem_points.forEach((points, index) => {
+                        if (points.points > 0 && !firstSolves[index]) {
+                            firstSolves[index] = user.username;
+                        }
+                    });
+                });
+                
                 // Update body rows
                 leaderboardList.innerHTML = data.users.map((user, index) => `
                     <tr>
                         <td>${index + 1}</td>
                         <td>${user.username}</td>
-                        ${user.problem_points.map(p => `
-                            <td>
+                        ${user.problem_points.map((p, i) => `
+                            <td class="${firstSolves[i] === user.username ? 'bg-success bg-opacity-25' : ''}">
                                 ${p.points > 0 ? `
                                     ${p.points}<br>
                                     <small class="text-muted">${p.submission_time || ''}</small>
@@ -598,6 +627,45 @@
                 console.error('Error loading leaderboard:', error);
             }
         }
+
+        // Load contest settings
+        async function loadContestSettings() {
+            try {
+                const response = await fetch('/contest_settings');
+                const settings = await response.json();
+                document.getElementById('contestName').value = settings.contest_name;
+                
+                // Update contest name in navbar
+                document.querySelector('.navbar-brand').textContent = settings.contest_name;
+            } catch (error) {
+                console.error('Error loading contest settings:', error);
+            }
+        }
+
+        // Save contest settings
+        document.getElementById('contestSettingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const contestName = document.getElementById('contestName').value;
+
+            try {
+                const response = await fetch('/update_contest_settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contest_name: contestName })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Settings updated successfully');
+                    // Update contest name in navbar
+                    document.querySelector('.navbar-brand').textContent = contestName;
+                } else {
+                    alert(result.error);
+                }
+            } catch (error) {
+                alert('An error occurred. Please try again.');
+            }
+        });
 
         // Submit solution
         document.getElementById('submitForm').addEventListener('submit', async (e) => {
@@ -779,6 +847,7 @@
             loadLeaderboard();
             checkAdmin();
             loadAdminProblems();
+            loadContestSettings();
         });
     </script>
 </body>
