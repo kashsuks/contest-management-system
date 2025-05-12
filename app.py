@@ -327,6 +327,7 @@ def get_leaderboard():
             })
             user_data['total_points'] += points
         
+        # Add user to leaderboard even if they have no submissions
         leaderboard_data.append(user_data)
     
     # Sort by total points in descending order

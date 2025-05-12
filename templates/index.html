@@ -272,7 +272,7 @@
                             <!-- Leaderboard -->
                             <div class="tab-pane fade" id="leaderboard">
                                 <div class="table-responsive">
-                                    <table class="table">
+                                    <table class="table" id="leaderboardTable">
                                         <thead>
                                             <tr>
                                                 <th>Rank</th>
@@ -567,16 +567,19 @@
                 const data = await response.json();
                 
                 const leaderboardTable = document.getElementById('leaderboardTable');
-                const headerRow = `
-                    <tr>
-                        <th>Rank</th>
-                        <th>User</th>
-                        ${data.problems.map(p => `<th>${p.title}</th>`).join('')}
-                        <th>Total</th>
-                    </tr>
+                const leaderboardList = document.getElementById('leaderboardList');
+                
+                // Update header row with problem titles
+                const headerRow = leaderboardTable.querySelector('thead tr');
+                headerRow.innerHTML = `
+                    <th>Rank</th>
+                    <th>User</th>
+                    ${data.problems.map(p => `<th>${p.title}</th>`).join('')}
+                    <th>Total</th>
                 `;
                 
-                const bodyRows = data.users.map((user, index) => `
+                // Update body rows
+                leaderboardList.innerHTML = data.users.map((user, index) => `
                     <tr>
                         <td>${index + 1}</td>
                         <td>${user.username}</td>
@@ -591,8 +594,6 @@
                         <td><strong>${user.total_points}</strong></td>
                     </tr>
                 `).join('');
-                
-                leaderboardTable.innerHTML = headerRow + bodyRows;
             } catch (error) {
                 console.error('Error loading leaderboard:', error);
             }
