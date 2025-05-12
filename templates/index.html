@@ -262,6 +262,7 @@
                                                 <th>Time</th>
                                                 <th>Memory</th>
                                                 <th>Submitted</th>
+                                                <th>View</th>
                                             </tr>
                                         </thead>
                                         <tbody id="submissionsList"></tbody>
@@ -516,7 +517,7 @@
         async function loadSubmissions() {
             const response = await fetch('/submissions');
             const submissions = await response.json();
-            document.getElementById('submissionsList').innerHTML = submissions.map(s => `
+            document.getElementById('submissionsList').innerHTML = submissions.sort((a, b) => b.id - a.id).map(s => `
                 <tr>
                     <td>${s.problem.title}</td>
                     <td>${s.language}</td>
@@ -525,6 +526,7 @@
                     <td>${s.execution_time ? s.execution_time.toFixed(2) + 'ms' : '-'}</td>
                     <td>${s.memory_used ? s.memory_used.toFixed(2) + 'KB' : '-'}</td>
                     <td>${new Date(s.submitted_at).toLocaleString()}</td>
+                    <td><button class="btn btn-primary btn-sm" onclick="viewSubmission(${s.id})">View</button></td>
                 </tr>
             `).join('');
         }
