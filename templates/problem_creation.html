@@ -113,13 +113,16 @@
 
             // read test cases from zip file
             const data = {}; // test cases
-            let num_loaded = 0;
-            let num_total = 0;
             JSZip.loadAsync(input.files[0]).then(content => {
+                let numLeft = 0;
+                // count all entries first before any of the asynchronous stuff
+                content.forEach((a, b) => {
+                    numLeft++;
+                });
+
                 content.forEach((relativePath, path) => {
-                    num_total++;
                     // matches filenames of the form inputxxx.txt or outputxxx.txt, where xxx is test case number
-                    const test_regex = /(input|output)\d{3}.txt$/g;
+                    const test_regex = /(\/|\\\\)(input|output)\d{3}.txt$/g;
                     if (!test_regex.test(relativePath)) {
                         return
                     }
@@ -135,22 +138,22 @@
                     if (filename.startsWith("input")) {
                         path.async('text').then(text => {
                             data[num][0] = text;
-                            num_loaded++;
-                            doStuff();
+                            numLeft--;
+                            showTestCasesIfLoadComplete(numLeft);
                         });
                     }
                     else {
                         path.async('text').then(text => {
                             data[num][1] = text;
-                            num_loaded++;
-                            doStuff();
+                            numLeft--;
+                            showTestCasesIfLoadComplete(numLeft);
                         })
                     }
                 })
             });
 
-            function doStuff() {
-                if (num_loaded != num_total) {
+            function showTestCasesIfLoadComplete(numLeftToLoad) {
+                if (numLeftToLoad != 0) {
                     return;
                 }
 
@@ -161,7 +164,6 @@
                 for (const num of Object.keys(data))
                 {
                     const temp = data[num];
-                    console.log(temp)
                     const input = temp[0].replaceAll("\n", "<br>");
                     const output = temp[1].replaceAll("\n", "<br>");
                     
@@ -171,8 +173,9 @@
                             <textarea type="text" class="form-control" required placeholder="Output">${output}</textarea>
                         </div>
                     `;
-                    console.log(testCaseLoc.innerHTML)
                 }
+
+                input.value = ""; // clear file so that future zip uploads can be done
             }
         }
 
