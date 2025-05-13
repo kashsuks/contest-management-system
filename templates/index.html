@@ -272,6 +272,9 @@
 
                             <!-- Leaderboard -->
                             <div class="tab-pane fade" id="leaderboard">
+                                <div class="alert alert-warning" id="leaderboardFrozenAlert" style="display: none;">
+                                    <strong>Note:</strong> The leaderboard is currently frozen. The displayed standings may not reflect the most recent submissions.
+                                </div>
                                 <div class="table-responsive">
                                     <table class="table" id="leaderboardTable">
                                         <thead>
@@ -366,6 +369,10 @@
                                                             <div class="mb-3">
                                                                 <label class="form-label">Contest Name</label>
                                                                 <input type="text" class="form-control" id="contestName" required>
+                                                            </div>
+                                                            <div class="mb-3 form-check">
+                                                                <input type="checkbox" class="form-check-input" id="leaderboardFrozen">
+                                                                <label class="form-check-label" for="leaderboardFrozen">Freeze Leaderboard</label>
                                                             </div>
                                                             <button type="submit" class="btn btn-primary">Save Settings</button>
                                                         </form>
@@ -589,13 +596,17 @@
                 
                 const leaderboardTable = document.getElementById('leaderboardTable');
                 const leaderboardList = document.getElementById('leaderboardList');
+                const frozenAlert = document.getElementById('leaderboardFrozenAlert');
                 
-                // Update header row with problem titles
+                // Show/hide frozen alert
+                frozenAlert.style.display = data.is_frozen ? 'block' : 'none';
+                
+                // Update header row with problem shortnames
                 const headerRow = leaderboardTable.querySelector('thead tr');
                 headerRow.innerHTML = `
                     <th>Rank</th>
                     <th>User</th>
-                    ${data.problems.map(p => `<th>${p.title}</th>`).join('')}
+                    ${data.problems.map(p => `<th>${p.shortname}</th>`).join('')}
                     <th>Total</th>
                 `;
                 
@@ -636,6 +647,7 @@
                 const response = await fetch('/contest_settings');
                 const settings = await response.json();
                 document.getElementById('contestName').value = settings.contest_name;
+                document.getElementById('leaderboardFrozen').checked = settings.leaderboard_frozen || false;
                 
                 // Update contest name in navbar
                 document.querySelector('.navbar-brand').textContent = settings.contest_name;
@@ -648,12 +660,16 @@
         document.getElementById('contestSettingsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const contestName = document.getElementById('contestName').value;
+            const leaderboardFrozen = document.getElementById('leaderboardFrozen').checked;
 
             try {
                 const response = await fetch('/update_contest_settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contest_name: contestName })
+                    body: JSON.stringify({ 
+                        contest_name: contestName,
+                        leaderboard_frozen: leaderboardFrozen
+                    })
                 });
 
                 const result = await response.json();
@@ -661,6 +677,8 @@
                     alert('Settings updated successfully');
                     // Update contest name in navbar
                     document.querySelector('.navbar-brand').textContent = contestName;
+                    // Update leaderboard if needed
+                    loadLeaderboard();
                 } else {
                     alert(result.error);
                 }
