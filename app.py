@@ -45,6 +45,7 @@ class User(UserMixin, db.Model):
 class Problem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
+    shortname = db.Column(db.String(10), nullable=False)  # A-Z for problem shortnames
     description = db.Column(db.Text, nullable=False)
     difficulty = db.Column(db.String(20), nullable=False)
     time_limit = db.Column(db.Integer, nullable=False)  # in milliseconds
@@ -182,8 +183,13 @@ def create_problem():
                     print("Invalid test case format")  # Debug print
                     return jsonify({'error': 'Each test case must have input and output'}), 400
         
+        # Generate shortname based on problem count
+        problem_count = Problem.query.count()
+        shortname = chr(65 + problem_count)  # A, B, C, etc.
+        
         problem = Problem(
             title=data['title'],
+            shortname=shortname,
             description=data['description'],
             difficulty=data['difficulty'],
             time_limit=data['time_limit'],
@@ -208,6 +214,7 @@ def get_problems():
     return jsonify([{
         'id': p.id,
         'title': p.title,
+        'shortname': p.shortname,
         'difficulty': p.difficulty,
         'time_limit': p.time_limit,
         'memory_limit': p.memory_limit
@@ -220,6 +227,7 @@ def get_problem(problem_id):
     return jsonify({
         'id': problem.id,
         'title': problem.title,
+        'shortname': problem.shortname,
         'description': problem.description,
         'difficulty': problem.difficulty,
         'time_limit': problem.time_limit,
@@ -344,8 +352,9 @@ def get_leaderboard():
     leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
     
     return jsonify({
-        'problems': [{'id': p.id, 'title': p.title} for p in problems],
-        'users': leaderboard_data
+        'problems': [{'id': p.id, 'title': p.title, 'shortname': p.shortname} for p in problems],
+        'users': leaderboard_data,
+        'is_frozen': contest_config.get('leaderboard_frozen', False)
     })
 
 @app.route('/submission/<int:submission_id>')
@@ -414,6 +423,10 @@ def update_contest_settings():
     
     contest_config['contest_name'] = data['contest_name']
     
+    # Handle leaderboard freeze
+    if 'leaderboard_frozen' in data:
+        contest_config['leaderboard_frozen'] = data['leaderboard_frozen']
+    
     # Save to config file
     with open('config/contest_config.json', 'w') as f:
         json.dump(contest_config, f, indent=4)
@@ -425,5 +438,17 @@ if __name__ == '__main__':
         # Drop all tables and recreate them
         db.drop_all()
         db.create_all()
-        init_admin()  # Initialize admin user
+        
+        # Initialize admin user
+        init_admin()
+        
+        # Initialize contest config if it doesn't exist
+        if not os.path.exists('config/contest_config.json'):
+            os.makedirs('config', exist_ok=True)
+            with open('config/contest_config.json', 'w') as f:
+                json.dump({
+                    'contest_name': 'Coding Contest',
+                    'leaderboard_frozen': False
+                }, f, indent=4)
+    
     app.run(host='0.0.0.0', port=5000, debug=True) 
