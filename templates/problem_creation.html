@@ -4,6 +4,7 @@
     <title>Create New Problem</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { padding: 2rem; }
         .markdown-preview {
@@ -84,11 +85,15 @@
                     </div>
                     <div class="test-cases">
                         <div class="test-case mb-2">
-                            <input type="text" class="form-control mb-2" placeholder="Input" required>
-                            <input type="text" class="form-control" placeholder="Output" required>
+                            <textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea>
+                            <textarea type="text" class="form-control" required placeholder="Output"></textarea>
                         </div>
                     </div>
                     <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
+                    <button type="button" class="btn btn-secondary btn-sm batch-upload" onclick="this.children[0].click()"> <!-- first child guaranteed to be the file upload -->
+                        <input class="batch-file" type="file" accept=".zip" hidden onchange="onBatchUpload(this)">
+                        Upload Test Cases (as .zip file)
+                    </button>
                 </div>
             </div>
             <button type="button" class="btn btn-secondary mb-3" onclick="addBatch()">Add Batch</button>
@@ -99,18 +104,96 @@
         </form>
     </div>
     <script>
+        // upload zip file, parse into test cases
+        function onBatchUpload(input) {
+            if (!confirm("This will erase all existing test cases for this batch. Are you sure you want to upload this file?")) {
+                input.value = ""; // remove file uploaded
+                return;
+            }
+
+            // read test cases from zip file
+            const data = {}; // test cases
+            let num_loaded = 0;
+            let num_total = 0;
+            JSZip.loadAsync(input.files[0]).then(content => {
+                content.forEach((relativePath, path) => {
+                    num_total++;
+                    // matches filenames of the form inputxxx.txt or outputxxx.txt, where xxx is test case number
+                    const test_regex = /(input|output)\d{3}.txt$/g;
+                    if (!test_regex.test(relativePath)) {
+                        return
+                    }
+
+                    const filename = relativePath.split('\\').pop().split('/').pop();
+                    const ind_digit = filename.search(/\d/g);
+                    const num = filename.substring(ind_digit, ind_digit + 3);
+                    if (!data[num]) {
+                        data[num] = ["", ""]; // first is input, second is output
+                    }
+                    
+                    let ind = 0;
+                    if (filename.startsWith("input")) {
+                        path.async('text').then(text => {
+                            data[num][0] = text;
+                            num_loaded++;
+                            doStuff();
+                        });
+                    }
+                    else {
+                        path.async('text').then(text => {
+                            data[num][1] = text;
+                            num_loaded++;
+                            doStuff();
+                        })
+                    }
+                })
+            });
+
+            function doStuff() {
+                if (num_loaded != num_total) {
+                    return;
+                }
+
+                // put test cases into html stuff
+                const parent = input.closest('.batch');
+                const testCaseLoc = parent.querySelector('.test-cases');
+                testCaseLoc.innerHTML = "";
+                for (const num of Object.keys(data))
+                {
+                    const temp = data[num];
+                    console.log(temp)
+                    const input = temp[0].replaceAll("\n", "<br>");
+                    const output = temp[1].replaceAll("\n", "<br>");
+                    
+                    testCaseLoc.innerHTML += `
+                        <div class="test-case mb-2">
+                            <textarea type="text" class="form-control mb-2" required placeholder="Input">${input}</textarea>
+                            <textarea type="text" class="form-control" required placeholder="Output">${output}</textarea>
+                        </div>
+                    `;
+                    console.log(testCaseLoc.innerHTML)
+                }
+            }
+        }
+
+        // update preview of problem description for markdown
         function updatePreview(text) {
             document.getElementById("preview").innerHTML = marked.parse(text);
         }
 
+        // add test case to batch
         function addTestCase(button) {
             const testCases = button.parentElement.querySelector(".test-cases");
             const newTestCase = document.createElement("div");
             newTestCase.className = "test-case mb-2";
-            newTestCase.innerHTML = '<input type="text" class="form-control mb-2" placeholder="Input" required><input type="text" class="form-control" placeholder="Output" required>';
+            newTestCase.innerHTML = `
+                <textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea>
+                <textarea type="text" class="form-control" required placeholder="Output"></textarea>
+            `;
             testCases.appendChild(newTestCase);
         }
 
+        // add batch
         function addBatch() {
             const batches = document.getElementById("batches");
             const batchCount = batches.children.length + 1;
@@ -128,26 +211,34 @@
                 </div>
                 <div class="test-cases">
                     <div class="test-case mb-2">
-                        <input type="text" class="form-control mb-2" placeholder="Input" required>
-                        <input type="text" class="form-control" placeholder="Output" required>
+                        <textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea>
+                        <textarea type="text" class="form-control" required placeholder="Output"></textarea>
                     </div>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>`;
+                <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
+                <button type="button" class="btn btn-secondary btn-sm batch-upload" onclick="this.children[0].click()">
+                    <input class="batch-file" type="file" accept=".zip" hidden onchange="onBatchUpload(this)">
+                    Upload Test Cases (as .zip file)
+                </button>
+            `;
             batches.appendChild(newBatch);
         }
 
+        // toggle visibility of batch
         function toggleBatch(button) {
             const batch = button.closest('.batch')
             const toHide = [
                 batch.querySelector('.batch-points'),
                 batch.querySelector('.test-cases'),
-                batch.querySelector('.batch-add')
+                batch.querySelector('.batch-add'),
+                batch.querySelector('.batch-upload')
             ];
             for (const elem of toHide) {
                 elem.classList.toggle("d-none")
             }
         }
 
+        // remove batch
         function removeBatch(button) {
             const batch = button.closest(".batch");
             if (document.querySelectorAll(".batch").length > 1) {
@@ -163,6 +254,7 @@
             });
         }
 
+        // submit problem to server
         document.getElementById("createProblemForm").addEventListener("submit", async (e) => {
             e.preventDefault();
             try {
@@ -177,7 +269,7 @@
                     batches: Array.from(document.querySelectorAll(".batch")).map(batch => {
                         const points = parseInt(batch.querySelector("[name='batch_points']").value);
                         const testCases = Array.from(batch.querySelectorAll(".test-case")).map(tc => {
-                            const inputs = tc.querySelectorAll("input");
+                            const inputs = tc.querySelectorAll("textarea");
                             return {
                                 input: inputs[0]?.value?.trim() || "",
                                 output: inputs[1]?.value?.trim() || ""
