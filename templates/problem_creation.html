@@ -72,23 +72,34 @@
                 <label class="form-label">Memory Limit (MB)</label>
                 <input type="number" class="form-control" name="memory_limit" value="256" required>
             </div>
+            <br>
             <div id="batches">
                 <div class="batch mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6>Batch 1</h6>
-                        <button type="button" class="btn btn-danger btn-sm" onclick="toggleBatch(this)">Toggle Visibility</button>
+                        <h5>Batch 1</h5>
+                        <button type="button" class="btn btn-danger btn-sm batch-toggle" onclick="toggleBatch(this)">Toggle Visibility</button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
                     </div>
                     <div class="mb-2 batch-points">
                         <label class="form-label">Points</label>
                         <input type="number" class="form-control" name="batch_points" value="10" required>
                     </div>
-                    <div class="test-cases">
-                        <div class="test-case mb-2">
-                            <textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea>
-                            <textarea type="text" class="form-control" required placeholder="Output"></textarea>
-                        </div>
-                    </div>
+                    <table class="table test-cases">
+                        <thead>
+                            <tr>
+                                <th>Input</th>
+                                <th>Output</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="test-case">
+                                <td><textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea></td>
+                                <td><textarea type="text" class="form-control" required placeholder="Output"></textarea></td>
+                                <td><button type="button" class="btn btn-danger btn-small" onclick="removeTestCase(this)">Remove Test Case</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
                     <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
                     <button type="button" class="btn btn-secondary btn-sm batch-upload" onclick="this.children[0].click()"> <!-- first child guaranteed to be the file upload -->
                         <input class="batch-file" type="file" accept=".zip" hidden onchange="onBatchUpload(this)">
@@ -96,6 +107,7 @@
                     </button>
                 </div>
             </div>
+            <br>
             <button type="button" class="btn btn-secondary mb-3" onclick="addBatch()">Add Batch</button>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Create Problem</button>
@@ -122,9 +134,9 @@
 
                 content.forEach((relativePath, path) => {
                     // matches filenames of the form inputxxx.txt or outputxxx.txt, where xxx is test case number
-                    const test_regex = /(\/|\\\\)(input|output)\d{3}.txt$/g;
+                    const test_regex = /(\/|\\\\)*(input|output)\d{3}.txt$/g;
                     if (!test_regex.test(relativePath)) {
-                        return
+                        return;
                     }
 
                     const filename = relativePath.split('\\').pop().split('/').pop();
@@ -134,21 +146,12 @@
                         data[num] = ["", ""]; // first is input, second is output
                     }
                     
-                    let ind = 0;
-                    if (filename.startsWith("input")) {
-                        path.async('text').then(text => {
-                            data[num][0] = text;
-                            numLeft--;
-                            showTestCasesIfLoadComplete(numLeft);
-                        });
-                    }
-                    else {
-                        path.async('text').then(text => {
-                            data[num][1] = text;
-                            numLeft--;
-                            showTestCasesIfLoadComplete(numLeft);
-                        })
-                    }
+                    let ind = +filename.startsWith("output"); // 0 if false (i.e. input), 1 if true (i.e. output)
+                    path.async('text').then(text => {
+                        data[num][ind] = text;
+                        numLeft--;
+                        showTestCasesIfLoadComplete(numLeft);
+                    });
                 })
             });
 
@@ -159,23 +162,26 @@
 
                 // put test cases into html stuff
                 const parent = input.closest('.batch');
-                const testCaseLoc = parent.querySelector('.test-cases');
+                const testCaseLoc = parent.querySelector('.test-cases').querySelector('tbody');
                 testCaseLoc.innerHTML = "";
+
+                let numTestCases = 0;
                 for (const num of Object.keys(data))
                 {
                     const temp = data[num];
                     const input = temp[0].replaceAll("\n", "<br>");
                     const output = temp[1].replaceAll("\n", "<br>");
                     
-                    testCaseLoc.innerHTML += `
-                        <div class="test-case mb-2">
-                            <textarea type="text" class="form-control mb-2" required placeholder="Input">${input}</textarea>
-                            <textarea type="text" class="form-control" required placeholder="Output">${output}</textarea>
-                        </div>
-                    `;
+                    testCaseLoc.appendChild(buildTestCase(input, output));
+                    numTestCases++;
                 }
 
                 input.value = ""; // clear file so that future zip uploads can be done
+
+                if (numTestCases > 10) {
+                    // hide batch so as to not blow up the user's screen
+                    toggleBatch(parent.querySelector('.batch-toggle'));
+                }
             }
         }
 
@@ -185,15 +191,22 @@
         }
 
         // add test case to batch
-        function addTestCase(button) {
-            const testCases = button.parentElement.querySelector(".test-cases");
-            const newTestCase = document.createElement("div");
-            newTestCase.className = "test-case mb-2";
-            newTestCase.innerHTML = `
-                <textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea>
-                <textarea type="text" class="form-control" required placeholder="Output"></textarea>
+        function buildTestCase(input_text = "", output_text = "") {
+            // innerHTML doesn't catch changes to textarea -> adding to innerHTML will overwrite previous values
+            // therefore, we manually build the test case html
+            const tr = document.createElement("tr");
+            tr.className = "test-case";
+            tr.innerHTML = `
+                <td><textarea type="text" class="form-control mb-2" required placeholder="Input">${input_text}</textarea></td>
+                <td><textarea type="text" class="form-control" required placeholder="Output">${output_text}</textarea></td>
+                <td><button type="button" class="btn btn-danger btn-small" onclick="removeTestCase(this)">Remove Test Case</button></td>
             `;
-            testCases.appendChild(newTestCase);
+            return tr;
+        }
+
+        function addTestCase(button) {
+            const testCases = button.parentElement.querySelector(".test-cases").querySelector('tbody');
+            testCases.appendChild(buildTestCase());
         }
 
         // add batch
@@ -204,20 +217,30 @@
             newBatch.className = "batch mb-4";
             newBatch.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6>Batch ${batchCount}</h6>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="toggleBatch(this)">Toggle Visibility</button>
+                    <h5>Batch ${batchCount}</h5>
+                    <button type="button" class="btn btn-danger btn-sm batch-toggle" onclick="toggleBatch(this)">Toggle Visibility</button>
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
                 </div>
                 <div class="mb-2 batch-points">
                     <label class="form-label">Points</label>
                     <input type="number" class="form-control" name="batch_points" value="10" required>
                 </div>
-                <div class="test-cases">
-                    <div class="test-case mb-2">
-                        <textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea>
-                        <textarea type="text" class="form-control" required placeholder="Output"></textarea>
-                    </div>
-                </div>
+                <table class="table test-cases">
+                    <thead>
+                        <tr>
+                            <th>Input</th>
+                            <th>Output</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="test-case">
+                            <td><textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea></td>
+                            <td><textarea type="text" class="form-control" required placeholder="Output"></textarea></td>
+                            <td><button type="button" class="btn btn-danger btn-small" onclick="removeTestCase(this)">Remove Test Case</button></td>
+                        </tr>
+                    </tbody>
+                </table>
                 <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
                 <button type="button" class="btn btn-secondary btn-sm batch-upload" onclick="this.children[0].click()">
                     <input class="batch-file" type="file" accept=".zip" hidden onchange="onBatchUpload(this)">
@@ -230,14 +253,39 @@
         // toggle visibility of batch
         function toggleBatch(button) {
             const batch = button.closest('.batch')
-            const toHide = [
+            const toToggle = [
                 batch.querySelector('.batch-points'),
                 batch.querySelector('.test-cases'),
                 batch.querySelector('.batch-add'),
                 batch.querySelector('.batch-upload')
             ];
-            for (const elem of toHide) {
-                elem.classList.toggle("d-none")
+            for (const elem of toToggle) {
+                elem.classList.toggle("d-none");
+            }
+
+            if (toToggle[0].classList.contains("d-none")) {
+                // hidden
+                const h5 = batch.querySelector('h5');
+                h5.dataset.original = h5.innerText;
+                h5.dataset.hidden = true;
+                h5.innerText += " (Hidden)";
+            }
+            else {
+                const h5 = batch.querySelector('h5');
+                h5.innerText = h5.dataset.original;
+                h5.dataset.hidden = false;
+            }
+        }
+
+        // remove test case
+        function removeTestCase(button) {
+            const testCase = button.closest('.test-case');
+            if (testCase.closest('tbody').children.length > 1) {
+                testCase.remove();
+            }
+            else {
+                alert("Cannot remove last test case of batch");
+                return;
             }
         }
 
@@ -248,12 +296,18 @@
                 batch.remove();
             } else {
                 alert("Cannot remove the last batch");
+                return;
             }
 
             // Update batch numbers
             const batches = document.getElementById('batches');
             Array.from(batches.children).forEach((batch, index) => {
-                batch.querySelector('h6').textContent = `Batch ${index + 1}`;
+                const h5 = batch.querySelector('h5');
+                h5.textContent = `Batch ${index + 1}`;
+                h5.dataset.original = h5.textContent;
+                if (h5.dataset.hidden) {
+                    h5.textContent += " (Hidden)";
+                }
             });
         }
 
