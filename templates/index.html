@@ -800,8 +800,10 @@
         // Update the openProblemCreation function to refresh admin problems after creation
         function openProblemCreation() {
             const newWindow = window.open('/problem_creation.html', '_blank');
-            newWindow.addEventListener('unload', () => {
-                loadAdminProblems();
+            newWindow.addEventListener('visibilitychange', event => {
+                if (newWindow.closed) {
+                    loadAdminProblems();
+                }
             });
         }
 
