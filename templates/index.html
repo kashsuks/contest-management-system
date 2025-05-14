@@ -411,11 +411,9 @@
             matchBrackets: true,
             indentUnit: 4,
             tabSize: 4,
-            lineNumberFormatter: function(line) {
-                return line;
-            },
+            lineNumberFormatter: line => line,
             extraKeys: {
-                "Tab": function(cm) {
+                "Tab": cm => {
                     if (cm.somethingSelected()) {
                         cm.indentSelection("add");
                     } else {
@@ -488,7 +486,7 @@
                 `;
 
                 const btn = document.createElement("button");
-                btn.innerText = "Submit Solution";
+                btn.textContent = "Submit Solution";
                 btn.className = "btn btn-primary btn-sm";
                 btn.addEventListener("click", () => {
                     const submit = document.querySelector("a[href='#submit']");
@@ -503,7 +501,6 @@
                 problemContent.appendChild(btn);
                 
                 // Store the problem ID for submission
-                document.getElementById('submitForm').dataset.problemId = id;
                 document.getElementById('problemSelect').value = id;
                 
                 // Switch to problem details tab
@@ -561,9 +558,7 @@
             let testcase_num = 1;
             for (const batch of submission.batch_results) {
                 const status = batch.status;
-                const div = document.createElement('div');
-                div.className = 'mb-3';
-                div.innerHTML = `
+                let innerHTML = `
                     <span display="font-size: .83em; font-weight: bold;">Batch ${batch_num}:</span>
                     <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span>
                     <br>
@@ -572,17 +567,23 @@
                 for (const test_case of batch.test_case_results) {
                     const status = test_case.status;
                     const indent = '<span style="display: inline-block; width: 2ch;">&#9;</span>';
-                    div.innerHTML += `
+
+                    innerHTML += `
                         ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span></span>
                     `;
                     if (status != "skip") {
-                        div.innerHTML += `
+                        innerHTML += `
                             ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}MB]</span>
                         `;
                     }
-                    div.innerHTML += '<br>';
+                    innerHTML += '<br>';
+
                     testcase_num++;
                 }
+
+                const div = document.createElement("div");
+                div.className = 'mb-3';
+                div.innerHTML = innerHTML;
 
                 viewer.appendChild(div);
                 batch_num++;
@@ -657,7 +658,7 @@
                 document.getElementById('leaderboardFrozen').checked = settings.leaderboard_frozen || false;
                 
                 // Update contest name in navbar
-                document.querySelector('.navbar-brand').textContent = settings.contest_name;
+                document.querySelector('.navbar-brand').textContent = settings.contest_name || "Coding Contest";
             } catch (error) {
                 console.error('Error loading contest settings:', error);
             }
@@ -844,6 +845,17 @@
             }
         }
 
+        // Set username
+        async function setUsername() {
+            try {
+                const response = await fetch('/username');
+                const name = await response.text();
+                document.getElementById("username").textContent = name;
+            } catch (error) {
+                console.error("Error loading username:", error);
+            }
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             console.log('Page loaded, initializing...');
@@ -870,7 +882,8 @@
             } else {
                 console.error('Form not found!');
             }
-            
+
+            setUsername();
             loadProblems();
             loadSubmissions();
             loadLeaderboard();
