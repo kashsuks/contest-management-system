@@ -33,7 +33,6 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     is_admin = db.Column(db.Boolean, default=False)
-    solved_problems = db.Column(db.Integer, default=0)
     submissions = db.relationship('Submission', backref='user', lazy=True)
 
     def set_password(self, password):
@@ -118,6 +117,10 @@ def login():
         return jsonify({'error': 'Invalid username or password'}), 401
     
     return render_template('login.html')
+
+@app.route('/username')
+def get_username():
+    return current_user.username
 
 @app.route('/logout')
 @login_required
@@ -285,18 +288,6 @@ def submit():
             submission.batch_results = result['batch_results']
             result['id'] = count
             
-            # If this is the first successful submission for this problem by this user
-            if result['status'] == 'AC':
-                previous_success = Submission.query.filter_by(
-                    user_id=current_user.id,
-                    problem_id=problem.id,
-                    status='AC'
-                ).first()
-                
-                if not previous_success:
-                    current_user.solved_problems += 1
-                    db.session.commit()
-            
             db.session.commit()
             return jsonify(result)
             
@@ -334,7 +325,7 @@ def get_leaderboard():
                 user_id=user.id,
                 problem_id=problem.id,
                 status='AC'
-            ).order_by(Submission.points_earned.desc()).first()
+            ).order_by(Submission.points_earned.desc()).order_by(Submission.submitted_at).first()
             
             points = best_submission.points_earned if best_submission else 0
             submission_time = best_submission.submitted_at if best_submission else None
