@@ -2,15 +2,20 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_socketio import SocketIO, emit
 import json
 import os
 from datetime import datetime
 from judge.judge import judge_submission
+from sqlalchemy import select
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Load contest configuration
 def load_contest_config():
@@ -69,7 +74,8 @@ class Submission(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    stmt = select(User).where(User.id == int(user_id))
+    return db.session.execute(stmt).scalar_one_or_none()
 
 def init_admin():
     """Initialize admin user if it doesn't exist"""
@@ -200,6 +206,16 @@ def create_problem():
         db.session.add(problem)
         db.session.commit()
         print("Problem created successfully")  # Debug print
+        
+        # Emit WebSocket event for new problem
+        socketio.emit('new_problem', {
+            'id': problem.id,
+            'title': problem.title,
+            'shortname': problem.shortname,
+            'difficulty': problem.difficulty,
+            'time_limit': problem.time_limit,
+            'memory_limit': problem.memory_limit
+        })
         
         return jsonify({'message': 'Problem created successfully', 'id': problem.id}), 201
     except Exception as e:
@@ -334,7 +350,7 @@ def get_leaderboard():
                 user_id=user.id,
                 problem_id=problem.id,
                 status='AC'
-            ).order_by(Submission.points_earned.desc()).first()
+            ).order_by(Submission.points_earned.desc()).order_by(Submission.submitted_at).first()
             
             points = best_submission.points_earned if best_submission else 0
             submission_time = best_submission.submitted_at if best_submission else None
@@ -451,4 +467,5 @@ if __name__ == '__main__':
                     'leaderboard_frozen': False
                 }, f, indent=4)
     
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    # Run the server on all network interfaces (0.0.0.0) and port 5000
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)

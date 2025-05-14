@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         * {
             margin: 0;
@@ -429,6 +430,49 @@
         document.getElementById('language').addEventListener('change', (e) => {
             const mode = e.target.value === 'python' ? 'python' : 'text/x-c++src';
             editor.setOption('mode', mode);
+        });
+
+        // Initialize Socket.IO
+        const socket = io();
+
+        // Listen for new problem events
+        socket.on('new_problem', (problem) => {
+            console.log('New problem received:', problem);
+            
+            // Update problem list
+            const problemList = document.getElementById('problemList');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td>${problem.id}</td>
+                <td>${problem.title}</td>
+                <td>${problem.difficulty}</td>
+                <td>${problem.time_limit}ms</td>
+                <td>${problem.memory_limit}MB</td>
+                <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${problem.id})">View Problem</button></td>
+            `;
+            problemList.insertBefore(newRow, problemList.firstChild);
+
+            // Update problem select dropdown
+            const problemSelect = document.getElementById('problemSelect');
+            const newOption = document.createElement('option');
+            newOption.value = problem.id;
+            newOption.textContent = `${problem.title} (${problem.difficulty})`;
+            problemSelect.appendChild(newOption);
+
+            // Show a notification
+            const notification = document.createElement('div');
+            notification.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
+            notification.style.zIndex = '1000';
+            notification.innerHTML = `
+                New problem added: ${problem.title}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.body.appendChild(notification);
+
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
         });
 
         // Load problems

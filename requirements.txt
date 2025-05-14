@@ -5,3 +5,4 @@ werkzeug
 docker
 python-dotenv
 psutil
+flask-socketio
