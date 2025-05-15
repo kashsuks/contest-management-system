@@ -439,6 +439,9 @@
             
             // Update problem list
             const problemList = document.getElementById('problemList');
+            const rows = Array.from(problemList.getElementsByTagName('tr'));
+            
+            // Create new row
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
                 <td>${problem.id}</td>
@@ -448,14 +451,47 @@
                 <td>${problem.memory_limit}MB</td>
                 <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${problem.id})">View Problem</button></td>
             `;
-            problemList.insertBefore(newRow, problemList.firstChild);
+
+            // Find the correct position to insert the new row
+            let inserted = false;
+            for (let i = 0; i < rows.length; i++) {
+                const currentId = parseInt(rows[i].cells[0].textContent);
+                if (problem.id < currentId) {
+                    problemList.insertBefore(newRow, rows[i]);
+                    inserted = true;
+                    break;
+                }
+            }
+            
+            // If not inserted (should be at the end), append it
+            if (!inserted) {
+                problemList.appendChild(newRow);
+            }
 
             // Update problem select dropdown
             const problemSelect = document.getElementById('problemSelect');
+            const options = Array.from(problemSelect.options);
+            
+            // Create new option
             const newOption = document.createElement('option');
             newOption.value = problem.id;
             newOption.textContent = `${problem.title} (${problem.difficulty})`;
-            problemSelect.appendChild(newOption);
+
+            // Find the correct position to insert the new option
+            inserted = false;
+            for (let i = 1; i < options.length; i++) { // Start from 1 to skip the "Select a problem" option
+                const currentId = parseInt(options[i].value);
+                if (problem.id < currentId) {
+                    problemSelect.insertBefore(newOption, options[i]);
+                    inserted = true;
+                    break;
+                }
+            }
+            
+            // If not inserted (should be at the end), append it
+            if (!inserted) {
+                problemSelect.appendChild(newOption);
+            }
 
             // Show a notification
             const notification = document.createElement('div');
