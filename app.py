@@ -442,9 +442,6 @@ def update_contest_settings():
 
 if __name__ == '__main__':
     with app.app_context():
-        # Drop all tables and recreate them
-        db.drop_all()
-        db.create_all()
         
         # Initialize admin user
         init_admin()
