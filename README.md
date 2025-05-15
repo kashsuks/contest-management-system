@@ -1,6 +1,6 @@
-# Coding Contest Platform
+# CMS (Contest Management System)
 
-A simple coding contest platform built with Flask and Docker for code execution.
+An in-person coding contest platform built using modern technologies
 
 ## Features
 
@@ -10,12 +10,11 @@ A simple coding contest platform built with Flask and Docker for code execution.
 - Support for multiple programming languages (C++, Java, Python)
 - Real-time code execution and judging
 - Submission history
-- Docker-based code execution for security
+- Subprocess based code execution
 
 ## Prerequisites
 
 - Python 3.8 or higher
-- Docker
 - pip (Python package manager)
 
 ## Setup
@@ -31,14 +30,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Build the Docker image for code execution:
+4. Setup the contest environment
 ```bash
-docker build -t coding-judge .
-```
-
-4. Initialize the database and add sample problems:
-```bash
-python add_sample_problems.py
+python setup.py
 ```
 
 ## Running the Application
@@ -48,25 +42,20 @@ python add_sample_problems.py
 python app.py
 ```
 
-2. Open your web browser and navigate to:
-```
-http://localhost:5000
-```
+2. Open your web browser and navigate to the link the flask app provides
 
 ## Project Structure
 
 ```
 .
 ├── app.py                 # Main Flask application
-├── requirements.txt       # Python dependencies
-├── Dockerfile            # Docker configuration for code execution
+├── requirements.txt       # Python dependenciesexecution
 ├── judge.py             # Code execution and judging script
-├── add_sample_problems.py # Script to add sample problems
 ├── templates/
-│   └── index.html       # Single-page application template
-└── static/
-    └── css/
-        └── style.css    # CSS styles
+│   └── index.html       # Sets up and is used for the interface
+│   └── base.html       # Sets up the base app
+│   └── login.html       # Login page
+│   └── problem_creation.html       # Problem Creation Form
 ```
 
 ## Security Considerations
