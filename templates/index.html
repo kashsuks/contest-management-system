@@ -136,7 +136,7 @@
             margin-top: 1rem;
             margin-bottom: 0.5rem;
         }
-        .markdown-preview pre {
+        .markdown-preview pre, .code-view {
             background-color: #f1f1f1;
             padding: 1rem;
             border-radius: 4px;
@@ -682,6 +682,12 @@
                 batch_num++;
             }
 
+            const codeView = document.createElement("div");
+            codeView.className = "code-view";
+            codeView.innerHTML = `<code>${submission.code}</code>`;
+            viewer.appendChild(document.createElement("br"));
+            viewer.appendChild(codeView);
+
             const viewProblem = document.querySelector('a[href="#viewSubmission"]');
             if (viewProblem) {
                 const tab = new bootstrap.Tab(viewProblem);
@@ -791,7 +797,7 @@
         // Submit solution
         document.getElementById('submitForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const code = editor.getValue();
+            const code = editor.getValue("<br>");
             const language = document.getElementById('language').value;
             const problemId = document.getElementById('problemSelect').value;
 
@@ -831,7 +837,6 @@
                 }
 
                 if (response.ok) {
-                    // alert(`Status: ${result.status}\nPoints Earned: ${result.points_earned}\nTime: ${result.execution_time}ms\nMemory: ${result.memory_used}KB`);
                     // Refresh all data
                     await Promise.all([
                         loadSubmissions(),
