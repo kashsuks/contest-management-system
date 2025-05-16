@@ -93,6 +93,9 @@ def run_code(code: str, language: str, test_case: Dict[str, str], time_limit: in
                 memory_used = ps_process.memory_info().rss / 1024  # Convert to KB
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 memory_used = 0  # If we can't get memory info, default to 0
+            
+            if memory_used > memory_limit:
+                return {'status': 'MLE', 'error': 'Memory limit exceeded'}
 
             if process.returncode != 0:
                 return {
@@ -161,8 +164,9 @@ def judge_submission(code, language, batches, time_limit, memory_limit):
                 batch_passed = False
                 error = result['status']
                 
-                # add specific execution time for TLE
+                # add specific execution time for TLE and MLE
                 time_taken = round(result.get('execution_time', 0), 2) if error != 'TLE' else f">{time_limit:.2f}"
+                memory_taken = round(result.get('memory_used', 0), 2) if error != 'MLE' else f">{memory_limit:.2f}"
                 
                 current_batch_result['test_case_results'].append({
                     'status': result['status'],
@@ -170,7 +174,7 @@ def judge_submission(code, language, batches, time_limit, memory_limit):
                     'expected': result.get('expected', ''),
                     'got': result.get('got', ''),
                     'execution_time': time_taken,
-                    'memory_used': result.get('memory_used', 0)
+                    'memory_used': memory_taken
                 })
             else:
                 current_batch_result['test_case_results'].append({

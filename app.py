@@ -290,7 +290,7 @@ def submit():
         # Judge the submission
         try:
             result = judge_submission(
-                code=data['code'],
+                code=data['code'].replace("<br>", "\n"),
                 language=data['language'],
                 batches=problem.batches,
                 time_limit=problem.time_limit,
@@ -379,7 +379,8 @@ def get_submission(submission_id):
         'problem': {
             'title': submission.problem.title,
             'total_points': sum(batch['points'] for batch in submission.problem.batches)
-        }
+        },
+        'code': submission.code
     })
 
 @app.route('/submissions')
