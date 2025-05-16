@@ -638,33 +638,46 @@
             let testcase_num = 1;
             for (const batch of submission.batch_results) {
                 const status = batch.status;
+                const div = document.createElement('div');
+                div.className = 'mb-3';
+                
+                // Check if batch has more than 10 test cases
+                const hasManyTestCases = batch.test_case_results.length > 10;
+                
                 let innerHTML = `
-                    <span display="font-size: .83em; font-weight: bold;">Batch ${batch_num}:</span>
+                    <span style="font-size: .83em; font-weight: bold;">Batch ${batch_num}:</span>
                     <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span>
-                    <br>
                 `;
 
-                for (const test_case of batch.test_case_results) {
-                    const status = test_case.status;
-                    const indent = '<span style="display: inline-block; width: 2ch;">&#9;</span>';
-
+                if (hasManyTestCases) {
+                    // For batches with many test cases, just show the overall status
                     innerHTML += `
-                        ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span></span>
+                        <br>
+                        <span style="margin-left: 2ch; color: #666;">
+                            ${batch.test_case_results.length} test cases - 
+                            ${batch.test_case_results.filter(tc => tc.status === 'AC').length} passed
+                        </span>
                     `;
-                    if (status != "skip") {
-                        innerHTML += `
-                            ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}MB]</span>
-                        `;
-                    }
+                } else {
+                    // For batches with 10 or fewer test cases, show individual results
                     innerHTML += '<br>';
-
-                    testcase_num++;
+                    for (const test_case of batch.test_case_results) {
+                        const status = test_case.status;
+                        const indent = '<span style="display: inline-block; width: 2ch;">&#9;</span>';
+                        innerHTML += `
+                            ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span></span>
+                        `;
+                        if (status != "skip") {
+                            innerHTML += `
+                                ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}MB]</span>
+                            `;
+                        }
+                        innerHTML += '<br>';
+                        testcase_num++;
+                    }
                 }
 
-                const div = document.createElement("div");
-                div.className = 'mb-3';
                 div.innerHTML = innerHTML;
-
                 viewer.appendChild(div);
                 batch_num++;
             }
