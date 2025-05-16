@@ -6,6 +6,7 @@ from flask_socketio import SocketIO, emit
 import json
 import os
 from datetime import datetime
+import pytz
 from judge.judge import judge_submission
 from sqlalchemy import select
 
@@ -56,7 +57,7 @@ class Problem(db.Model):
     memory_limit = db.Column(db.Integer, nullable=False)  # in MB
     batches = db.Column(db.JSON, nullable=False)  # List of batches, each containing test cases and points
     submissions = db.relationship('Submission', backref='problem', lazy=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
 class Submission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -68,7 +69,7 @@ class Submission(db.Model):
     execution_time = db.Column(db.Float)  # in milliseconds
     memory_used = db.Column(db.Float)  # in KB
     points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone('America/New_York')))
     batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
 
 @login_manager.user_loader
@@ -442,7 +443,6 @@ def update_contest_settings():
 
 if __name__ == '__main__':
     with app.app_context():
-        # Drop all tables and recreate them
         db.drop_all()
         db.create_all()
         
