@@ -60,7 +60,6 @@ python app.py
 
 ## Security Considerations
 
-- Code execution is sandboxed using Docker containers
 - Each submission runs in an isolated environment
 - Resource limits (time and memory) are enforced
 - User authentication is required for submissions
