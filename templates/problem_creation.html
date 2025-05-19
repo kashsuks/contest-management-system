@@ -136,6 +136,7 @@
                     // matches filenames of the form inputxxx.txt or outputxxx.txt, where xxx is test case number
                     const test_regex = /(\/|\\\\)*(input|output)\d{3}.txt$/g;
                     if (!test_regex.test(relativePath)) {
+                        numLeft--;
                         return;
                     }
 
