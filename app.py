@@ -69,7 +69,7 @@ class Submission(db.Model):
     execution_time = db.Column(db.Float)  # in milliseconds
     memory_used = db.Column(db.Float)  # in KB
     points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
-    submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone('America/New_York')))
+    submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone(contest_config.get('time_zone', 'UTC'))))
     batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
 
 @login_manager.user_loader
