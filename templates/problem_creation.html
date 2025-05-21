@@ -84,12 +84,12 @@
                         <label class="form-label">Points</label>
                         <input type="number" class="form-control" name="batch_points" value="10" required>
                     </div>
-                    <table class="table test-cases">
+                    <table class="table test-cases" style="width: 100%;">
                         <thead>
                             <tr>
-                                <th>Input</th>
-                                <th>Output</th>
-                                <th></th>
+                                <th style="width: 43%;">Input</th>
+                                <th style="width: 43%;">Output</th>
+                                <th style="width: 14%;"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -107,8 +107,8 @@
                     </button>
                 </div>
             </div>
-            <br>
             <button type="button" class="btn btn-secondary mb-3" onclick="addBatch()">Add Batch</button>
+            <br><br>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Create Problem</button>
                 <button type="button" class="btn btn-secondary" onclick="window.close()">Cancel</button>
@@ -118,6 +118,10 @@
     <script>
         // upload zip file, parse into test cases
         function onBatchUpload(input) {
+            if (input.files.length > 0) {
+                return;
+            }
+
             if (!confirm("This will erase all existing test cases for this batch. Are you sure you want to upload this file?")) {
                 input.value = ""; // remove file uploaded
                 return;
