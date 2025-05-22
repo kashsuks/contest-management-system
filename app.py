@@ -318,6 +318,57 @@ def submit():
         print(f"Submission error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/run_code', methods=['POST'])
+@login_required
+def run_code():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        if 'code' not in data:
+            return jsonify({'error': 'Code is required'}), 400
+            
+        if 'language' not in data:
+            return jsonify({'error': 'Language is required'}), 400
+            
+        if 'test_cases' not in data or not isinstance(data['test_cases'], list):
+            return jsonify({'error': 'Test cases are required'}), 400
+
+        # Create a single batch with the test cases
+        batch = {
+            'points': 0,  # Points don't matter for running code
+            'test_cases': data['test_cases']
+        }
+        
+        # Get time and memory limits from the problem if provided, otherwise use defaults
+        time_limit = data.get('time_limit', 1000)  # Default 1 second
+        memory_limit = data.get('memory_limit', 256)  # Default 256MB
+        
+        # Run the code
+        try:
+            result = judge_submission(
+                code=data['code'].replace("<br>", "\n"),
+                language=data['language'],
+                batches=[batch],
+                time_limit=time_limit,
+                memory_limit=memory_limit
+            )
+            
+            # Remove submission-specific fields
+            result.pop('points_earned', None)
+            result.pop('id', None)
+            
+            return jsonify(result)
+            
+        except Exception as e:
+            print(f"Run error: {str(e)}")
+            return jsonify({'error': f'Run error: {str(e)}'}), 500
+            
+    except Exception as e:
+        print(f"Run error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/leaderboard')
 @login_required
 def get_leaderboard():

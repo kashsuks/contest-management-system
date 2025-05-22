@@ -189,6 +189,9 @@
                                 <a class="nav-link" data-bs-toggle="tab" href="#submit">Submit</a>
                             </li>
                             <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#run">Run</a>
+                            </li>
+                            <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#viewSubmission">View Submission</a>
                             </li>
                             <li class="nav-item">
@@ -251,6 +254,48 @@
                                     </div>
                                     <button type="submit" class="btn btn-primary">Submit</button>
                                 </form>
+                            </div>
+
+                            <!-- Run Code -->
+                            <div class="tab-pane fade" id="run">
+                                <form id="runForm">
+                                    <div class="mb-3">
+                                        <label class="form-label">Language</label>
+                                        <select class="form-select" id="runLanguage">
+                                            <option value="python">Python</option>
+                                            <option value="cpp">C++</option>
+                                            <option value="java">Java</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Code</label>
+                                        <textarea id="runCode"></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Test Cases</label>
+                                        <div id="runTestCases">
+                                            <div class="test-case mb-3">
+                                                <div class="d-flex gap-2 mb-2">
+                                                    <div class="flex-grow-1">
+                                                        <label class="form-label">Input</label>
+                                                        <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <label class="form-label">Expected Output</label>
+                                                        <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
+                                                    </div>
+                                                </div>
+                                                <button type="button" class="btn btn-danger btn-sm" onclick="removeRunTestCase(this)">Remove Test Case</button>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="addRunTestCase()">Add Test Case</button>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Run Code</button>
+                                </form>
+                                <div id="runResults" class="mt-4" style="display: none;">
+                                    <h5>Results</h5>
+                                    <div id="runResultsContent"></div>
+                                </div>
                             </div>
 
                             <!-- View submission -->
@@ -988,6 +1033,148 @@
             checkAdmin();
             loadAdminProblems();
             loadContestSettings();
+        });
+
+        // Run code functionality
+        function addRunTestCase() {
+            const container = document.getElementById('runTestCases');
+            const testCase = document.createElement('div');
+            testCase.className = 'test-case mb-3';
+            testCase.innerHTML = `
+                <div class="d-flex gap-2 mb-2">
+                    <div class="flex-grow-1">
+                        <label class="form-label">Input</label>
+                        <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
+                    </div>
+                    <div class="flex-grow-1">
+                        <label class="form-label">Expected Output</label>
+                        <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeRunTestCase(this)">Remove Test Case</button>
+            `;
+            container.appendChild(testCase);
+        }
+
+        function removeRunTestCase(button) {
+            const container = document.getElementById('runTestCases');
+            if (container.children.length > 1) {
+                button.closest('.test-case').remove();
+            } else {
+                alert("Cannot remove the last test case");
+            }
+        }
+
+        // Initialize CodeMirror for run code
+        const runCodeEditor = CodeMirror.fromTextArea(document.getElementById('runCode'), {
+            mode: 'text/x-c++src',
+            theme: 'monokai',
+            lineNumbers: true,
+            indentUnit: 4,
+            tabSize: 4,
+            indentWithTabs: false,
+            lineWrapping: true,
+            matchBrackets: true,
+            autoCloseBrackets: true,
+            extraKeys: {"Tab": "indentMore", "Shift-Tab": "indentLess"}
+        });
+
+        // Handle run code form submission
+        document.getElementById('runForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const language = document.getElementById('runLanguage').value;
+            const code = runCodeEditor.getValue();
+            
+            // Collect test cases
+            const testCases = [];
+            document.querySelectorAll('#runTestCases .test-case').forEach(tc => {
+                const input = tc.querySelector('.test-input').value.trim();
+                const output = tc.querySelector('.test-output').value.trim();
+                if (input || output) {  // Only add if either input or output is provided
+                    testCases.push({ input, output });
+                }
+            });
+            
+            if (testCases.length === 0) {
+                alert('Please add at least one test case');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/run_code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        code, 
+                        language,
+                        test_cases: testCases
+                    })
+                });
+
+                const result = await response.json();
+                
+                // Display results
+                const resultsDiv = document.getElementById('runResults');
+                const resultsContent = document.getElementById('runResultsContent');
+                resultsDiv.style.display = 'block';
+                
+                let html = '';
+                if (response.ok) {
+                    const batch = result.batch_results[0];  // We only have one batch for running
+                    html = `
+                        <div class="alert alert-${result.status === 'AC' ? 'success' : 'danger'}">
+                            <strong>Status:</strong> ${result.status}
+                            ${result.status === 'AC' ? 
+                                `<br><strong>Execution Time:</strong> ${result.execution_time}ms
+                                 <br><strong>Memory Used:</strong> ${result.memory_used}KB` : 
+                                `<br><strong>Error:</strong> ${result.error || 'Unknown error'}`
+                            }
+                        </div>
+                        <div class="test-results">
+                            <h6>Test Case Results:</h6>
+                    `;
+                    
+                    batch.test_case_results.forEach((tc, i) => {
+                        html += `
+                            <div class="test-case-result mb-3">
+                                <strong>Test Case ${i + 1}:</strong>
+                                <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${tc.status}</span>
+                                ${tc.status !== 'AC' ? `
+                                    <div class="mt-2">
+                                        <strong>Expected:</strong><br>
+                                        <pre class="bg-light p-2">${tc.expected || ''}</pre>
+                                        <strong>Got:</strong><br>
+                                        <pre class="bg-light p-2">${tc.got || ''}</pre>
+                                    </div>
+                                ` : ''}
+                                ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
+                                ${tc.memory_used ? `<br>Memory: ${tc.memory_used}KB` : ''}
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                } else {
+                    html = `<div class="alert alert-danger">Error: ${result.error || 'Unknown error'}</div>`;
+                }
+                
+                resultsContent.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Run error:', error);
+                alert('An error occurred while running the code. Please try again.');
+            }
+        });
+
+        // Update CodeMirror mode when language changes
+        document.getElementById('runLanguage').addEventListener('change', function() {
+            const mode = {
+                'python': 'text/x-python',
+                'cpp': 'text/x-c++src',
+                'java': 'text/x-java'
+            }[this.value];
+            runCodeEditor.setOption('mode', mode);
         });
     </script>
 </body>
