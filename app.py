@@ -354,7 +354,8 @@ def run_code():
                 language=data['language'],
                 batches=[batch],
                 time_limit=time_limit,
-                memory_limit=memory_limit
+                memory_limit=memory_limit,
+                is_run_code=True  # Set this to True for run code submissions
             )
             
             # Remove submission-specific fields

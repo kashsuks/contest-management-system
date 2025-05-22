@@ -1142,7 +1142,7 @@
                             ${result.status === 'AC' ? 
                                 `<br><strong>Execution Time:</strong> ${result.execution_time}ms
                                  <br><strong>Memory Used:</strong> ${result.memory_used}KB` : 
-                                `<br><strong>Error:</strong> ${result.error || 'Unknown error'}`
+                                ''
                             }
                         </div>
                         <div class="test-results">
@@ -1156,10 +1156,11 @@
                                 <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${tc.status}</span>
                                 ${tc.status !== 'AC' ? `
                                     <div class="mt-2">
-                                        <strong>Expected:</strong><br>
+                                        <strong>Expected Output:</strong><br>
                                         <pre class="bg-light p-2">${tc.expected || ''}</pre>
-                                        <strong>Got:</strong><br>
+                                        <strong>Your Output:</strong><br>
                                         <pre class="bg-light p-2">${tc.got || ''}</pre>
+                                        ${tc.error ? `<br><strong>Error:</strong> ${tc.error}` : ''}
                                     </div>
                                 ` : ''}
                                 ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
