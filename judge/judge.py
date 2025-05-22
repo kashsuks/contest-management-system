@@ -130,12 +130,13 @@ def run_code(code: str, language: str, test_case: Dict[str, str], time_limit: in
         except Exception as e:
             return {'status': 'RE', 'error': str(e)}
 
-def judge_submission(code, language, batches, time_limit, memory_limit):
+def judge_submission(code, language, batches, time_limit, memory_limit, is_run_code=False):
     """Judge a submission against batches of test cases."""
     total_earned = 0
     max_execution_time = 0
     max_memory_used = 0
     batch_results = []
+    all_passed = True
 
     # Run against each batch
     for batch in batches:
@@ -162,6 +163,7 @@ def judge_submission(code, language, batches, time_limit, memory_limit):
             
             if result['status'] != 'AC':
                 batch_passed = False
+                all_passed = False
                 error = result['status']
                 
                 # add specific execution time for TLE and MLE
@@ -197,8 +199,12 @@ def judge_submission(code, language, batches, time_limit, memory_limit):
         
         batch_results.append(current_batch_result)
     
+    # For run code submissions, use all_passed to determine status
+    # For contest submissions, use total_earned as before
+    status = 'AC' if (is_run_code and all_passed) or (not is_run_code and total_earned > 0) else 'WA'
+    
     return {
-        'status': 'AC' if total_earned > 0 else 'WA',
+        'status': status,
         'points_earned': total_earned,
         'execution_time': round(max_execution_time, 2),
         'memory_used': max_memory_used,
