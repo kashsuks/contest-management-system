@@ -15,6 +15,8 @@ app.config['SECRET_KEY'] = 'key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+
+
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -69,7 +71,7 @@ class Submission(db.Model):
     execution_time = db.Column(db.Float)  # in milliseconds
     memory_used = db.Column(db.Float)  # in KB
     points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
-    submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone('America/New_York')))
+    submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone(contest_config.get('time_zone', 'UTC'))))
     batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
 
 @login_manager.user_loader
@@ -164,33 +166,33 @@ def create_problem():
     
     try:
         data = request.get_json()
-        print("Received data:", data)  # Debug print
+        print("Received data:", data)
         
         required_fields = ['title', 'description', 'difficulty', 'time_limit', 'memory_limit', 'batches']
         
         # Validate required fields
         for field in required_fields:
             if field not in data:
-                print(f"Missing field: {field}")  # Debug print
+                print(f"Missing field: {field}")
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
         # Validate batches
         if not isinstance(data['batches'], list) or len(data['batches']) == 0:
-            print("Invalid batches")  # Debug print
+            print("Invalid batches")
             return jsonify({'error': 'At least one batch is required'}), 400
         
         for batch in data['batches']:
             if 'points' not in batch or 'test_cases' not in batch:
-                print("Invalid batch format")  # Debug print
+                print("Invalid batch format")
                 return jsonify({'error': 'Each batch must have points and test_cases'}), 400
             
             if not isinstance(batch['test_cases'], list) or len(batch['test_cases']) == 0:
-                print("Invalid test cases in batch")  # Debug print
+                print("Invalid test cases in batch")
                 return jsonify({'error': 'Each batch must have at least one test case'}), 400
             
             for test_case in batch['test_cases']:
                 if 'input' not in test_case or 'output' not in test_case:
-                    print("Invalid test case format")  # Debug print
+                    print("Invalid test case format")
                     return jsonify({'error': 'Each test case must have input and output'}), 400
         
         # Generate shortname based on problem count
@@ -209,7 +211,7 @@ def create_problem():
         
         db.session.add(problem)
         db.session.commit()
-        print("Problem created successfully")  # Debug print
+        print("Problem created successfully")
         
         # Emit WebSocket event for new problem
         socketio.emit('new_problem', {
@@ -223,7 +225,7 @@ def create_problem():
         
         return jsonify({'message': 'Problem created successfully', 'id': problem.id}), 201
     except Exception as e:
-        print("Error creating problem:", str(e))  # Debug print
+        print("Error creating problem:", str(e))
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
@@ -408,6 +410,7 @@ def get_leaderboard():
         leaderboard_data.append(user_data)
     
     # Sort by total points in descending order
+    print(leaderboard_data)
     leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
     
     return jsonify({
