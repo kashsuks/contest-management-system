@@ -469,8 +469,22 @@
             }
         });
 
+        // When clicking in CodeMirror, due to the +29px offset of the cursor, the cursor is set to the right of the clicked position
+        // This event listener tries to fix that (still kinda jank)
+        editor.getWrapperElement().addEventListener("click", event => {
+            const cursor = document.querySelector(".CodeMirror-cursors");
+            cursor.style.display = "none";
+
+            const x = event.pageX;
+            const y = event.pageY;
+            const loc = editor.coordsChar({left: x - 29, top: y}); // subtract 29 to cancel out +29px of cursor in CSS
+            editor.getDoc().setCursor(loc);
+
+            cursor.style.display = "block";
+        });
+
         // Update editor mode when language changes
-        document.getElementById('language').addEventListener('change', (e) => {
+        document.getElementById('language').addEventListener('change', e => {
             const mode = e.target.value === 'python' ? 'python' : 'text/x-c++src';
             editor.setOption('mode', mode);
         });
