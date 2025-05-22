@@ -188,9 +188,9 @@
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#submit">Submit</a>
                             </li>
-                            <li class="nav-item">
+                            <!-- <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#run">Run</a>
-                            </li>
+                            </li> -->
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#viewSubmission">View Submission</a>
                             </li>
@@ -234,12 +234,14 @@
                             <!-- Submit Solution -->
                             <div class="tab-pane fade" id="submit">
                                 <form id="submitForm">
+                                    <!-- Problem select -->
                                     <div class="mb-3">
                                         <label class="form-label">Problem</label>
                                         <select class="form-select" id="problemSelect" required>
                                             <option value="">Select a problem</option>
                                         </select>
                                     </div>
+                                    <!-- Language select -->
                                     <div class="mb-3">
                                         <label class="form-label">Language</label>
                                         <select class="form-select" id="language">
@@ -248,16 +250,35 @@
                                             <option value="java">Java</option>
                                         </select>
                                     </div>
+                                    <!-- Code -->
                                     <div class="mb-3">
                                         <label class="form-label">Code</label>
                                         <textarea id="code"></textarea>
                                     </div>
+                                    <!-- UI for testing code with sample test case -->
+                                    <div class="d-flex gap-2 mb-2">
+                                        <div class="flex-grow-1">
+                                            <label class="form-label">Input</label>
+                                            <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <label class="form-label">Expected Output</label>
+                                            <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" id="run-code">Run Code</button>
+                                    <div id="runResults" class="mt-4" style="display: none;">
+                                        <h5>Results</h5>
+                                        <div id="runResultsContent"></div>
+                                    </div>
+                                    <br><br>
+                                    <!-- Submit -->
                                     <button type="submit" class="btn btn-primary">Submit</button>
                                 </form>
                             </div>
 
                             <!-- Run Code -->
-                            <div class="tab-pane fade" id="run">
+                            <!-- <div class="tab-pane fade" id="run">
                                 <form id="runForm">
                                     <div class="mb-3">
                                         <label class="form-label">Language</label>
@@ -296,7 +317,7 @@
                                     <h5>Results</h5>
                                     <div id="runResultsContent"></div>
                                 </div>
-                            </div>
+                            </div> -->
 
                             <!-- View submission -->
                             <div class="tab-pane fade" id="viewSubmission">
@@ -1049,6 +1070,7 @@
             loadContestSettings();
         });
 
+
         // Run code functionality
         function addRunTestCase() {
             const container = document.getElementById('runTestCases');
@@ -1079,42 +1101,37 @@
             }
         }
 
-        // Initialize CodeMirror for run code
-        const runCodeEditor = CodeMirror.fromTextArea(document.getElementById('runCode'), {
-            mode: 'text/x-c++src',
-            theme: 'monokai',
-            lineNumbers: true,
-            indentUnit: 4,
-            tabSize: 4,
-            indentWithTabs: false,
-            lineWrapping: true,
-            matchBrackets: true,
-            autoCloseBrackets: true,
-            extraKeys: {"Tab": "indentMore", "Shift-Tab": "indentLess"}
-        });
+        // // Initialize CodeMirror for run code
+        // const runCodeEditor = CodeMirror.fromTextArea(document.getElementById('runCode'), {
+        //     mode: 'text/x-c++src',
+        //     theme: 'monokai',
+        //     lineNumbers: true,
+        //     indentUnit: 4,
+        //     tabSize: 4,
+        //     indentWithTabs: false,
+        //     lineWrapping: true,
+        //     matchBrackets: true,
+        //     autoCloseBrackets: true,
+        //     extraKeys: {"Tab": "indentMore", "Shift-Tab": "indentLess"}
+        // });
 
         // Handle run code form submission
-        document.getElementById('runForm').addEventListener('submit', async (e) => {
+        document.getElementById('run-code').addEventListener('click', async function (e) {
             e.preventDefault();
-            
-            const language = document.getElementById('runLanguage').value;
-            const code = runCodeEditor.getValue();
-            
-            // Collect test cases
-            const testCases = [];
-            document.querySelectorAll('#runTestCases .test-case').forEach(tc => {
-                const input = tc.querySelector('.test-input').value.trim();
-                const output = tc.querySelector('.test-output').value.trim();
-                if (input || output) {  // Only add if either input or output is provided
-                    testCases.push({ input, output });
-                }
-            });
-            
-            if (testCases.length === 0) {
-                alert('Please add at least one test case');
+
+            const language = document.getElementById('language').value;
+            const code = editor.getValue();
+
+            // Get input and output
+            const parentForm = this.closest('form');
+            const input = parentForm.querySelector('.test-input').value.trim();
+            const output = parentForm.querySelector('.test-output').value.trim();
+
+            if (!input && !output) {
+                alert("Please enter test case");
                 return;
             }
-            
+
             try {
                 const response = await fetch('/run_code', {
                     method: 'POST',
@@ -1122,7 +1139,7 @@
                     body: JSON.stringify({ 
                         code, 
                         language,
-                        test_cases: testCases
+                        test_cases: [{ input, output }]
                     })
                 });
 
@@ -1175,22 +1192,110 @@
                 }
                 
                 resultsContent.innerHTML = html;
-                
             } catch (error) {
-                console.error('Run error:', error);
+                console.error(error);
                 alert('An error occurred while running the code. Please try again.');
             }
         });
 
-        // Update CodeMirror mode when language changes
-        document.getElementById('runLanguage').addEventListener('change', function() {
-            const mode = {
-                'python': 'text/x-python',
-                'cpp': 'text/x-c++src',
-                'java': 'text/x-java'
-            }[this.value];
-            runCodeEditor.setOption('mode', mode);
-        });
+        // // Handle run code form submission
+        // document.getElementById('run-code').addEventListener('click', async (e) => {
+        //     e.preventDefault();
+            
+        //     const language = document.getElementById('runLanguage').value;
+        //     const code = runCodeEditor.getValue();
+            
+        //     // Collect test cases
+        //     const testCases = [];
+        //     document.querySelectorAll('#runTestCases .test-case').forEach(tc => {
+        //         const input = tc.querySelector('.test-input').value.trim();
+        //         const output = tc.querySelector('.test-output').value.trim();
+        //         if (input || output) {  // Only add if either input or output is provided
+        //             testCases.push({ input, output });
+        //         }
+        //     });
+            
+        //     if (testCases.length === 0) {
+        //         alert('Please add at least one test case');
+        //         return;
+        //     }
+            
+        //     try {
+        //         const response = await fetch('/run_code', {
+        //             method: 'POST',
+        //             headers: { 'Content-Type': 'application/json' },
+        //             body: JSON.stringify({ 
+        //                 code, 
+        //                 language,
+        //                 test_cases: testCases
+        //             })
+        //         });
+
+        //         const result = await response.json();
+                
+        //         // Display results
+        //         const resultsDiv = document.getElementById('runResults');
+        //         const resultsContent = document.getElementById('runResultsContent');
+        //         resultsDiv.style.display = 'block';
+                
+        //         let html = '';
+        //         if (response.ok) {
+        //             const batch = result.batch_results[0];  // We only have one batch for running
+        //             html = `
+        //                 <div class="alert alert-${result.status === 'AC' ? 'success' : 'danger'}">
+        //                     <strong>Status:</strong> ${result.status}
+        //                     ${result.status === 'AC' ? 
+        //                         `<br><strong>Execution Time:</strong> ${result.execution_time}ms
+        //                          <br><strong>Memory Used:</strong> ${result.memory_used}KB` : 
+        //                         ''
+        //                     }
+        //                 </div>
+        //                 <div class="test-results">
+        //                     <h6>Test Case Results:</h6>
+        //             `;
+                    
+        //             batch.test_case_results.forEach((tc, i) => {
+        //                 html += `
+        //                     <div class="test-case-result mb-3">
+        //                         <strong>Test Case ${i + 1}:</strong>
+        //                         <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${tc.status}</span>
+        //                         ${tc.status !== 'AC' ? `
+        //                             <div class="mt-2">
+        //                                 <strong>Expected Output:</strong><br>
+        //                                 <pre class="bg-light p-2">${tc.expected || ''}</pre>
+        //                                 <strong>Your Output:</strong><br>
+        //                                 <pre class="bg-light p-2">${tc.got || ''}</pre>
+        //                                 ${tc.error ? `<br><strong>Error:</strong> ${tc.error}` : ''}
+        //                             </div>
+        //                         ` : ''}
+        //                         ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
+        //                         ${tc.memory_used ? `<br>Memory: ${tc.memory_used}KB` : ''}
+        //                     </div>
+        //                 `;
+        //             });
+                    
+        //             html += '</div>';
+        //         } else {
+        //             html = `<div class="alert alert-danger">Error: ${result.error || 'Unknown error'}</div>`;
+        //         }
+                
+        //         resultsContent.innerHTML = html;
+                
+        //     } catch (error) {
+        //         console.error('Run error:', error);
+        //         alert('An error occurred while running the code. Please try again.');
+        //     }
+        // });
+
+        // // Update CodeMirror mode when language changes
+        // document.getElementById('runLanguage').addEventListener('change', function() {
+        //     const mode = {
+        //         'python': 'text/x-python',
+        //         'cpp': 'text/x-c++src',
+        //         'java': 'text/x-java'
+        //     }[this.value];
+        //     runCodeEditor.setOption('mode', mode);
+        // });
     </script>
 </body>
 </html>
