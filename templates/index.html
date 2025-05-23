@@ -255,25 +255,42 @@
                                         <label class="form-label">Code</label>
                                         <textarea id="code"></textarea>
                                     </div>
-                                    <!-- UI for testing code with sample test case -->
-                                    <div class="d-flex gap-2 mb-2">
-                                        <div class="flex-grow-1">
-                                            <label class="form-label">Input</label>
-                                            <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
+
+                                    <div class="card-header">
+                                        <ul class="nav nav-tabs card-header-tabs" id="submitTabs">
+                                            <li class="nav-item">
+                                                <a class="nav-link active" data-bs-toggle="tab" href="#testCodeTab">Test Code</a>
+                                            </li>
+                                            <li class="nav-item">
+                                                <a class="nav-link" data-bs-toggle="tab" href="#submitCodeTab">Submit</a>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <div class="card-body" id="submitCodeNavBar">
+                                        <!-- UI for testing code with sample test case -->
+                                        <div class="tab-pane fade show active" id="testCodeTab">
+                                            <div class="d-flex gap-2 mb-2">
+                                                <div class="flex-grow-1">
+                                                    <label class="form-label">Input</label>
+                                                    <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <label class="form-label">Expected Output</label>
+                                                    <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="btn btn-primary" id="run-code">Run Code</button>
+                                            <div id="runResults" class="mt-4" style="display: none;">
+                                                <h5>Results</h5>
+                                                <div id="runResultsContent"></div>
+                                            </div>
                                         </div>
-                                        <div class="flex-grow-1">
-                                            <label class="form-label">Expected Output</label>
-                                            <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
+                                        <!-- Submit -->
+                                        <div class="tab-pane fade" id="submitCodeTab">
+                                            <button type="submit" class="btn btn-primary">Submit</button>
                                         </div>
                                     </div>
-                                    <button type="button" class="btn btn-primary" id="run-code">Run Code</button>
-                                    <div id="runResults" class="mt-4" style="display: none;">
-                                        <h5>Results</h5>
-                                        <div id="runResultsContent"></div>
-                                    </div>
-                                    <br><br>
-                                    <!-- Submit -->
-                                    <button type="submit" class="btn btn-primary">Submit</button>
                                 </form>
                             </div>
 
@@ -468,7 +485,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
-    <script>
+    <script defer>
         // Initialize CodeMirror
         const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
             mode: 'python',
@@ -492,16 +509,16 @@
 
         // When clicking in CodeMirror, due to the +29px offset of the cursor, the cursor is set to the right of the clicked position
         // This event listener tries to fix that (still kinda jank)
-        editor.getWrapperElement().addEventListener("click", event => {
-            const cursor = document.querySelector(".CodeMirror-cursors");
-            cursor.style.display = "none";
+        editor.getWrapperElement().addEventListener('click', event => {
+            const cursor = document.querySelector('.CodeMirror-cursors');
+            cursor.style.display = 'none';
 
             const x = event.pageX;
             const y = event.pageY;
             const loc = editor.coordsChar({left: x - 29, top: y}); // subtract 29 to cancel out +29px of cursor in CSS
             editor.getDoc().setCursor(loc);
 
-            cursor.style.display = "block";
+            cursor.style.display = 'block';
         });
 
         // Update editor mode when language changes
@@ -645,10 +662,10 @@
                     <br>
                 `;
 
-                const btn = document.createElement("button");
-                btn.textContent = "Submit Solution";
-                btn.className = "btn btn-primary btn-sm";
-                btn.addEventListener("click", () => {
+                const btn = document.createElement('button');
+                btn.textContent = 'Submit Solution';
+                btn.className = 'btn btn-primary btn-sm';
+                btn.addEventListener('click', () => {
                     const submit = document.querySelector("a[href='#submit']");
                     if (submit) {
                         const tab = new bootstrap.Tab(submit);
@@ -747,7 +764,7 @@
                         innerHTML += `
                             ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span></span>
                         `;
-                        if (status != "skip") {
+                        if (status != 'skip') {
                             innerHTML += `
                                 ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}MB]</span>
                             `;
@@ -762,10 +779,10 @@
                 batch_num++;
             }
 
-            const codeView = document.createElement("div");
-            codeView.className = "code-view";
+            const codeView = document.createElement('div');
+            codeView.className = 'code-view';
             codeView.innerHTML = `<code>${submission.code}</code>`;
-            viewer.appendChild(document.createElement("br"));
+            viewer.appendChild(document.createElement('br'));
             viewer.appendChild(codeView);
 
             const viewProblem = document.querySelector('a[href="#viewSubmission"]');
@@ -837,7 +854,7 @@
                 document.getElementById('leaderboardFrozen').checked = settings.leaderboard_frozen || false;
                 
                 // Update contest name in navbar
-                document.querySelector('.navbar-brand').textContent = settings.contest_name || "Coding Contest";
+                document.querySelector('.navbar-brand').textContent = settings.contest_name || 'Coding Contest';
             } catch (error) {
                 console.error('Error loading contest settings:', error);
             }
@@ -877,7 +894,7 @@
         // Submit solution
         document.getElementById('submitForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const code = editor.getValue("<br>");
+            const code = editor.getValue('<br>');
             const language = document.getElementById('language').value;
             const problemId = document.getElementById('problemSelect').value;
 
@@ -1028,39 +1045,15 @@
             try {
                 const response = await fetch('/username');
                 const name = await response.text();
-                document.getElementById("username").textContent = name;
+                document.getElementById('username').textContent = name;
             } catch (error) {
-                console.error("Error loading username:", error);
+                console.error('Error loading username:', error);
             }
         }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             console.log('Page loaded, initializing...');
-            
-            // Initialize form fields
-            const form = document.getElementById('createProblemForm');
-            if (form) {
-                console.log('Form found, initializing fields...');
-                // Set default values
-                form.querySelector('[name="time_limit"]').value = '1000';
-                form.querySelector('[name="memory_limit"]').value = '256';
-                form.querySelector('[name="difficulty"]').value = 'Easy';
-                
-                // Initialize test cases
-                const testCases = document.getElementById('testCases');
-                if (testCases) {
-                    testCases.innerHTML = `
-                        <div class="test-case mb-2">
-                            <input type="text" class="form-control mb-2" placeholder="Input" required>
-                            <input type="text" class="form-control" placeholder="Output" required>
-                        </div>
-                    `;
-                }
-            } else {
-                console.error('Form not found!');
-            }
-
             setUsername();
             loadProblems();
             loadSubmissions();
@@ -1070,36 +1063,51 @@
             loadContestSettings();
         });
 
+        // Add event listeners so that whenever a nav link in the submit tab is clicked, only the corresponding tab is shown
+        // (everything else is hidden so that it takes up no space in the page)
+        document.getElementById('submitTabs').querySelectorAll('.nav-link').forEach(currentElem => {
+            currentElem.addEventListener('click', () => {
+                const idOfCurrentLink = currentElem.href.split('#').pop();
+                document.getElementById('submitCodeNavBar').querySelectorAll('.tab-pane').forEach(elem => {
+                    if (elem.id == idOfCurrentLink) {
+                        elem.style.display = "block";
+                    }
+                    else {
+                        elem.style.display = "none";
+                    }
+                });
+            });
+        });
 
-        // Run code functionality
-        function addRunTestCase() {
-            const container = document.getElementById('runTestCases');
-            const testCase = document.createElement('div');
-            testCase.className = 'test-case mb-3';
-            testCase.innerHTML = `
-                <div class="d-flex gap-2 mb-2">
-                    <div class="flex-grow-1">
-                        <label class="form-label">Input</label>
-                        <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
-                    </div>
-                    <div class="flex-grow-1">
-                        <label class="form-label">Expected Output</label>
-                        <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
-                    </div>
-                </div>
-                <button type="button" class="btn btn-danger btn-sm" onclick="removeRunTestCase(this)">Remove Test Case</button>
-            `;
-            container.appendChild(testCase);
-        }
+        // // Run code functionality
+        // function addRunTestCase() {
+        //     const container = document.getElementById('runTestCases');
+        //     const testCase = document.createElement('div');
+        //     testCase.className = 'test-case mb-3';
+        //     testCase.innerHTML = `
+        //         <div class="d-flex gap-2 mb-2">
+        //             <div class="flex-grow-1">
+        //                 <label class="form-label">Input</label>
+        //                 <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
+        //             </div>
+        //             <div class="flex-grow-1">
+        //                 <label class="form-label">Expected Output</label>
+        //                 <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
+        //             </div>
+        //         </div>
+        //         <button type="button" class="btn btn-danger btn-sm" onclick="removeRunTestCase(this)">Remove Test Case</button>
+        //     `;
+        //     container.appendChild(testCase);
+        // }
 
-        function removeRunTestCase(button) {
-            const container = document.getElementById('runTestCases');
-            if (container.children.length > 1) {
-                button.closest('.test-case').remove();
-            } else {
-                alert("Cannot remove the last test case");
-            }
-        }
+        // function removeRunTestCase(button) {
+        //     const container = document.getElementById('runTestCases');
+        //     if (container.children.length > 1) {
+        //         button.closest('.test-case').remove();
+        //     } else {
+        //         alert("Cannot remove the last test case");
+        //     }
+        // }
 
         // // Initialize CodeMirror for run code
         // const runCodeEditor = CodeMirror.fromTextArea(document.getElementById('runCode'), {
@@ -1128,7 +1136,7 @@
             const output = parentForm.querySelector('.test-output').value.trim();
 
             if (!input && !output) {
-                alert("Please enter test case");
+                alert('Please enter test case');
                 return;
             }
 
