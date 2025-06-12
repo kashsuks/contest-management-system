@@ -465,6 +465,10 @@
                                                                 <input type="checkbox" class="form-check-input" id="leaderboardFrozen">
                                                                 <label class="form-check-label" for="leaderboardFrozen">Freeze Leaderboard</label>
                                                             </div>
+                                                            <div class="mb-3 form-check">
+                                                                <input type="checkbox" class="form-check-input" id="submissionStop">
+                                                                <label class="form-check-label" for="submissionStop">Stop submissions</label>
+                                                            </div>
                                                             <button type="submit" class="btn btn-primary">Save Settings</button>
                                                         </form>
                                                     </div>
@@ -865,6 +869,7 @@
             e.preventDefault();
             const contestName = document.getElementById('contestName').value;
             const leaderboardFrozen = document.getElementById('leaderboardFrozen').checked;
+            const submissionStopped = document.getElementById('submissionStop').checked;
 
             try {
                 const response = await fetch('/update_contest_settings', {
@@ -872,7 +877,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         contest_name: contestName,
-                        leaderboard_frozen: leaderboardFrozen
+                        leaderboard_frozen: leaderboardFrozen,
+                        submissions_stopped: submissionStopped
                     })
                 });
 
