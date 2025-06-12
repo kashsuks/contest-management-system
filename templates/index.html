@@ -173,6 +173,20 @@
     </nav>
 
     <div class="container mt-4">
+        <!-- Modal -->
+        <div class="modal fade" id="popup" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        ...
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
         <div class="row">
             <!-- Main Content Area -->
             <div class="col-12">
@@ -610,6 +624,21 @@
             }, 5000);
         });
 
+        // Displays a popup box with a message
+        function alertPopup(html, mode = 'neutral') {
+            let modeSpan = '';
+            if (mode == 'success') {
+                modeSpan = `<span style="color: green; font-weight: bold;">Success</span>: `
+            } else if (mode == 'error') {
+                modeSpan = `<span style="color: red; font-weight: bold;">Error</span>: `
+            }
+
+            const popup = document.getElementById('popup');
+            popup.querySelector('.modal-body').innerHTML = `${modeSpan}${html}`;
+            const modal = new bootstrap.Modal(popup);
+            modal.show();
+        }
+
         // Load problems
         async function loadProblems() {
             console.log('Loading problems...');
@@ -692,7 +721,7 @@
                 }
             } catch (error) {
                 console.error('Error loading problem:', error);
-                alert('Failed to load problem details. Please try again.');
+                alertPopup('Failed to load problem details. Please try again.', 'error');
             }
         }
 
@@ -884,16 +913,17 @@
 
                 const result = await response.json();
                 if (response.ok) {
-                    alert('Settings updated successfully');
+                    alertPopup('Settings updated successfully', 'success');
                     // Update contest name in navbar
                     document.querySelector('.navbar-brand').textContent = contestName;
                     // Update leaderboard if needed
                     loadLeaderboard();
                 } else {
-                    alert(result.error);
+                    alertPopup(result.error, 'error');
                 }
             } catch (error) {
-                alert('An error occurred. Please try again.');
+                console.error(error);
+                alertPopup('An error occurred. Please try again.', 'error');
             }
         });
 
@@ -905,7 +935,7 @@
             const problemId = document.getElementById('problemSelect').value;
 
             if (!problemId) {
-                alert('Please select a problem first');
+                alertPopup('Please select a problem first', 'error');
                 return;
             }
 
@@ -935,7 +965,7 @@
                     result = JSON.parse(responseText);
                 } catch (parseError) {
                     console.error('Failed to parse response:', parseError);
-                    alert('Server returned invalid response. Please try again.');
+                    alertPopup('Server returned invalid response. Please try again.', 'error');
                     return;
                 }
 
@@ -948,11 +978,11 @@
                         viewSubmission(result.id)
                     ]);
                 } else {
-                    alert(result.error || 'Submission failed');
+                    alertPopup(result.error || 'Submission failed', 'error');
                 }
             } catch (error) {
                 console.error('Submission error:', error);
-                alert('An error occurred. Please try again.');
+                alertPopup('An error occurred. Please try again.', 'error');
             }
         });
 
@@ -972,13 +1002,13 @@
 
                 const result = await response.json();
                 if (response.ok) {
-                    alert('User created successfully');
+                    alertPopup('User created successfully', 'success');
                     e.target.reset();
                 } else {
-                    alert(result.error);
+                    alertPopup(result.error, 'error');
                 }
             } catch (error) {
-                alert('An error occurred. Please try again.');
+                alertPopup('An error occurred. Please try again.', 'error');
             }
         });
 
@@ -1142,7 +1172,7 @@
             const output = parentForm.querySelector('.test-output').value.trim();
 
             if (!input && !output) {
-                alert('Please enter test case');
+                alertPopup('Please enter test case', 'error');
                 return;
             }
 
@@ -1208,7 +1238,7 @@
                 resultsContent.innerHTML = html;
             } catch (error) {
                 console.error(error);
-                alert('An error occurred while running the code. Please try again.');
+                alertPopup('An error occurred while running the code. Please try again.', 'error');
             }
         });
 
