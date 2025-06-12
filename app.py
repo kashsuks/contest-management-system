@@ -260,6 +260,9 @@ def get_problem(problem_id):
 @app.route('/submit', methods=['POST'])
 @login_required
 def submit():
+    if 'submissions_stopped' in contest_config and contest_config['submissions_stopped']:
+        return jsonify({ 'error': 'Submissions have been stopped' }), 400
+    
     try:
         data = request.get_json()
         if not data:
@@ -411,7 +414,6 @@ def get_leaderboard():
         leaderboard_data.append(user_data)
     
     # Sort by total points in descending order
-    print(leaderboard_data)
     leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
     
     return jsonify({
@@ -490,6 +492,10 @@ def update_contest_settings():
     # Handle leaderboard freeze
     if 'leaderboard_frozen' in data:
         contest_config['leaderboard_frozen'] = data['leaderboard_frozen']
+    
+    # Handle submissions stopped
+    if 'submissions_stopped' in data:
+        contest_config['submissions_stopped'] = data['submissions_stopped']
     
     # Save to config file
     with open('config/contest_config.json', 'w') as f:
