@@ -73,6 +73,7 @@ class Submission(db.Model):
     points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
     submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone(contest_config.get('time_zone', 'UTC'))))
     batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
+    submitted_while_frozen = db.Column(db.Boolean, nullable=False, default=False)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -260,7 +261,7 @@ def get_problem(problem_id):
 @app.route('/submit', methods=['POST'])
 @login_required
 def submit():
-    if 'submissions_stopped' in contest_config and contest_config['submissions_stopped']:
+    if contest_config.get('submissions_stopped', False):
         return jsonify({ 'error': 'Submissions have been stopped' }), 400
     
     try:
@@ -287,7 +288,8 @@ def submit():
             code=data['code'],
             language=data['language'],
             status='PENDING',
-            id=count
+            id=count,
+            submitted_while_frozen=contest_config.get('leaderboard_frozen', False)
         )
         db.session.add(submission)
         db.session.commit()
@@ -309,6 +311,9 @@ def submit():
             submission.points_earned = result.get('points_earned', 0)
             submission.batch_results = result['batch_results']
             result['id'] = count
+            
+            # Emit WebSocket event for new submission - update leaderboard
+            socketio.emit('update_leaderboard')
             
             db.session.commit()
             return jsonify(result)
@@ -384,6 +389,9 @@ def get_leaderboard():
     # Get all problems
     problems = Problem.query.order_by(Problem.id).all()
     
+    # Get whether leaderboard is frozen
+    is_frozen = contest_config.get('leaderboard_frozen', False)
+    
     # Calculate points for each user
     leaderboard_data = []
     for user in users:
@@ -399,7 +407,16 @@ def get_leaderboard():
                 user_id=user.id,
                 problem_id=problem.id,
                 status='AC'
-            ).order_by(Submission.points_earned.desc()).order_by(Submission.submitted_at).first()
+            )
+            if is_frozen: # Frozen leaderboard - filter out submissions made while frozen
+                best_submission = best_submission.filter_by(
+                    submitted_while_frozen=False
+                )
+            best_submission = best_submission.order_by(Submission.points_earned.desc()).order_by(Submission.submitted_at).first()
+            
+            # If leaderboard was not frozen when this submission was counted, count this submission for all subsequent displays of the leaderboard
+            if not is_frozen and best_submission:
+                best_submission.submitted_while_frozen = False
             
             points = best_submission.points_earned if best_submission else 0
             submission_time = best_submission.submitted_at if best_submission else None
@@ -416,6 +433,7 @@ def get_leaderboard():
     # Sort by total points in descending order
     leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
     
+    db.session.commit()
     return jsonify({
         'problems': [{'id': p.id, 'title': p.title, 'shortname': p.shortname} for p in problems],
         'users': leaderboard_data,
@@ -492,6 +510,10 @@ def update_contest_settings():
     # Handle leaderboard freeze
     if 'leaderboard_frozen' in data:
         contest_config['leaderboard_frozen'] = data['leaderboard_frozen']
+        if contest_config['leaderboard_frozen']:
+            socketio.emit('update_leaderboard', 'Leaderboard has been frozen. The displayed leaderboard may not reflect the most recent standings.')
+        else:
+            socketio.emit('update_leaderboard', 'Leaderboard has been unfrozen.')
     
     # Handle submissions stopped
     if 'submissions_stopped' in data:
