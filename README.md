@@ -8,9 +8,11 @@ An in-person coding contest platform built using modern technologies
 - Problem listing with search functionality
 - Code editor with syntax highlighting
 - Support for multiple programming languages (C++, Java, Python)
-- Real-time code execution and judging
+- Real-time subprocess-based code execution and judging
 - Submission history
-- Subprocess based code execution
+- Problem creation form with title, description, time and memory limits, and test cases
+- Admin-only panel for problem creation, user account creation, etc.
+- Leaderboard that ranks participants in real time (can be frozen to not display updates)
 
 ## Prerequisites
 
@@ -48,14 +50,14 @@ python app.py
 
 ```
 .
-├── app.py                 # Main Flask application
-├── requirements.txt       # Python dependenciesexecution
-├── judge.py             # Code execution and judging script
+├── app.py                      # Main Flask application
+├── requirements.txt            # Python dependencies
+├── judge.py                    # Code execution and judging script
 ├── templates/
-│   └── index.html       # Sets up and is used for the interface
-│   └── base.html       # Sets up the base app
-│   └── login.html       # Login page
-│   └── problem_creation.html       # Problem Creation Form
+│   └── index.html              # Main interface of the platform
+│   └── base.html               # Sets up the base app
+│   └── login.html              # Login page
+│   └── problem_creation.html   # Problem Creation Form
 ```
 
 ## Security Considerations

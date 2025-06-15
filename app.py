@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 import pytz
 from judge.judge import judge_submission
-from sqlalchemy import select
+from sqlalchemy import select, event
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key'
@@ -74,6 +74,15 @@ class Submission(db.Model):
     submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone(contest_config.get('time_zone', 'UTC'))))
     batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
     submitted_while_frozen = db.Column(db.Boolean, nullable=False, default=False)
+
+def test(mapper, connection, target):
+    print("??")
+    print(target.id)
+
+event.listen(User, 'after_update', test)
+event.listen(User, 'after_insert', test)
+
+event.listen(Submission, 'after_update', test)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -262,7 +271,7 @@ def get_problem(problem_id):
 @login_required
 def submit():
     if contest_config.get('submissions_stopped', False):
-        return jsonify({ 'error': 'Submissions have been stopped' }), 400
+        return jsonify({'error': 'Submissions have been stopped'}), 400
     
     try:
         data = request.get_json()
@@ -272,7 +281,7 @@ def submit():
         if 'problem_id' not in data:
             return jsonify({'error': 'Problem ID is required'}), 400
             
-        if 'code' not in data:
+        if ('code' not in data) or len(data['code']) == 0:
             return jsonify({'error': 'Code is required'}), 400
             
         if 'language' not in data:
