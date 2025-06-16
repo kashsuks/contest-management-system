@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
