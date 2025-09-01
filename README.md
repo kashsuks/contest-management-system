@@ -46,20 +46,6 @@ python app.py
 
 2. Open your web browser and navigate to the link the flask app provides
 
-## Project Structure
-
-```
-.
-├── app.py                      # Main Flask application
-├── requirements.txt            # Python dependencies
-├── judge.py                    # Code execution and judging script
-├── templates/
-│   └── index.html              # Main interface of the platform
-│   └── base.html               # Sets up the base app
-│   └── login.html              # Login page
-│   └── problem_creation.html   # Problem Creation Form
-```
-
 ## Security Considerations
 
 - Each submission runs in an isolated environment
