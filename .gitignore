@@ -4,3 +4,4 @@
 /judge/__pycache__
 /config
 coding_contest.db
+.DS_STORE
