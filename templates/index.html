@@ -173,6 +173,20 @@
     </nav>
 
     <div class="container mt-4">
+        <!-- Modal -->
+        <div class="modal fade" id="popup" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        ...
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    
         <div class="row">
             <!-- Main Content Area -->
             <div class="col-12">
@@ -277,7 +291,7 @@
                                                 </div>
                                                 <div class="flex-grow-1">
                                                     <label class="form-label">Expected Output</label>
-                                                    <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
+                                                    <textarea class="form-control test-output" rows="3" placeholder="Enter expected output (leave this field empty to simply display the output of the program)"></textarea>
                                                 </div>
                                             </div>
                                             <button type="button" class="btn btn-primary" id="run-code">Run Code</button>
@@ -465,6 +479,10 @@
                                                                 <input type="checkbox" class="form-check-input" id="leaderboardFrozen">
                                                                 <label class="form-check-label" for="leaderboardFrozen">Freeze Leaderboard</label>
                                                             </div>
+                                                            <div class="mb-3 form-check">
+                                                                <input type="checkbox" class="form-check-input" id="submissionStop">
+                                                                <label class="form-check-label" for="submissionStop">Stop submissions</label>
+                                                            </div>
                                                             <button type="submit" class="btn btn-primary">Save Settings</button>
                                                         </form>
                                                     </div>
@@ -527,11 +545,45 @@
             editor.setOption('mode', mode);
         });
 
+        // Show a notification
+        function showNotification(html) {
+            // Delete previously shown notifications
+            document.querySelectorAll('.notif').forEach(e => {
+                e.remove();
+            });
+
+            // Create new notification
+            const notification = document.createElement('div');
+            notification.className = 'notif alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
+            notification.style.zIndex = '1000';
+            notification.innerHTML = html + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+            document.body.appendChild(notification);
+
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+
+            return notification;
+        }
+
         // Initialize Socket.IO
         const socket = io();
 
+        // Listen for events to update leaderboard (e.g. someone made a submission)
+        socket.on('update_leaderboard', async txt => {
+            try {
+                await loadLeaderboard();
+                if (txt) {
+                    showNotification(txt);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+
         // Listen for new problem events
-        socket.on('new_problem', (problem) => {
+        socket.on('new_problem', problem => {
             console.log('New problem received:', problem);
             
             // Update problem list
@@ -591,20 +643,23 @@
             }
 
             // Show a notification
-            const notification = document.createElement('div');
-            notification.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
-            notification.style.zIndex = '1000';
-            notification.innerHTML = `
-                New problem added: ${problem.title}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            `;
-            document.body.appendChild(notification);
-
-            // Remove notification after 5 seconds
-            setTimeout(() => {
-                notification.remove();
-            }, 5000);
+            showNotification(`New problem added: ${problem.title}`);
         });
+
+        // Displays a popup box with a message
+        function alertPopup(html, mode = 'neutral') {
+            let modeSpan = '';
+            if (mode == 'success') {
+                modeSpan = `<span style="color: green; font-weight: bold;">Success</span>: `
+            } else if (mode == 'error') {
+                modeSpan = `<span style="color: red; font-weight: bold;">Error</span>: `
+            }
+
+            const popup = document.getElementById('popup');
+            popup.querySelector('.modal-body').innerHTML = `${modeSpan}${html}`;
+            const modal = new bootstrap.Modal(popup);
+            modal.show();
+        }
 
         // Load problems
         async function loadProblems() {
@@ -688,7 +743,7 @@
                 }
             } catch (error) {
                 console.error('Error loading problem:', error);
-                alert('Failed to load problem details. Please try again.');
+                alertPopup('Failed to load problem details. Please try again.', 'error');
             }
         }
 
@@ -865,6 +920,7 @@
             e.preventDefault();
             const contestName = document.getElementById('contestName').value;
             const leaderboardFrozen = document.getElementById('leaderboardFrozen').checked;
+            const submissionStopped = document.getElementById('submissionStop').checked;
 
             try {
                 const response = await fetch('/update_contest_settings', {
@@ -872,22 +928,24 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         contest_name: contestName,
-                        leaderboard_frozen: leaderboardFrozen
+                        leaderboard_frozen: leaderboardFrozen,
+                        submissions_stopped: submissionStopped
                     })
                 });
 
                 const result = await response.json();
                 if (response.ok) {
-                    alert('Settings updated successfully');
+                    alertPopup('Settings updated successfully', 'success');
                     // Update contest name in navbar
                     document.querySelector('.navbar-brand').textContent = contestName;
                     // Update leaderboard if needed
                     loadLeaderboard();
                 } else {
-                    alert(result.error);
+                    alertPopup(result.error, 'error');
                 }
             } catch (error) {
-                alert('An error occurred. Please try again.');
+                console.error(error);
+                alertPopup('An error occurred. Please try again.', 'error');
             }
         });
 
@@ -899,7 +957,7 @@
             const problemId = document.getElementById('problemSelect').value;
 
             if (!problemId) {
-                alert('Please select a problem first');
+                alertPopup('Please select a problem first', 'error');
                 return;
             }
 
@@ -929,7 +987,7 @@
                     result = JSON.parse(responseText);
                 } catch (parseError) {
                     console.error('Failed to parse response:', parseError);
-                    alert('Server returned invalid response. Please try again.');
+                    alertPopup('Server returned invalid response. Please try again.', 'error');
                     return;
                 }
 
@@ -942,11 +1000,11 @@
                         viewSubmission(result.id)
                     ]);
                 } else {
-                    alert(result.error || 'Submission failed');
+                    alertPopup(result.error || 'Submission failed', 'error');
                 }
             } catch (error) {
                 console.error('Submission error:', error);
-                alert('An error occurred. Please try again.');
+                alertPopup('An error occurred. Please try again.', 'error');
             }
         });
 
@@ -966,13 +1024,13 @@
 
                 const result = await response.json();
                 if (response.ok) {
-                    alert('User created successfully');
+                    alertPopup('User created successfully', 'success');
                     e.target.reset();
                 } else {
-                    alert(result.error);
+                    alertPopup(result.error, 'error');
                 }
             } catch (error) {
-                alert('An error occurred. Please try again.');
+                alertPopup('An error occurred. Please try again.', 'error');
             }
         });
 
@@ -1135,8 +1193,11 @@
             const input = parentForm.querySelector('.test-input').value.trim();
             const output = parentForm.querySelector('.test-output').value.trim();
 
-            if (!input && !output) {
-                alert('Please enter test case');
+            // If output is empty, just print output of program
+            const justPrintOutput = !output;
+
+            if (!input) {
+                alertPopup('Please enter test case input', 'error');
                 return;
             }
 
@@ -1161,40 +1222,46 @@
                 let html = '';
                 if (response.ok) {
                     const batch = result.batch_results[0];  // We only have one batch for running
-                    html = `
-                        <div class="alert alert-${result.status === 'AC' ? 'success' : 'danger'}">
-                            <strong>Status:</strong> ${result.status}
-                            ${result.status === 'AC' ? 
-                                `<br><strong>Execution Time:</strong> ${result.execution_time}ms
-                                 <br><strong>Memory Used:</strong> ${result.memory_used}KB` : 
-                                ''
-                            }
-                        </div>
-                        <div class="test-results">
-                            <h6>Test Case Results:</h6>
-                    `;
-                    
-                    batch.test_case_results.forEach((tc, i) => {
-                        html += `
+                    const tc = batch.test_case_results[0];
+                    if (justPrintOutput) {
+                        html = `
                             <div class="test-case-result mb-3">
-                                <strong>Test Case ${i + 1}:</strong>
-                                <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${tc.status}</span>
-                                ${tc.status !== 'AC' ? `
-                                    <div class="mt-2">
-                                        <strong>Expected Output:</strong><br>
-                                        <pre class="bg-light p-2">${tc.expected || ''}</pre>
-                                        <strong>Your Output:</strong><br>
-                                        <pre class="bg-light p-2">${tc.got || ''}</pre>
-                                        ${tc.error ? `<br><strong>Error:</strong> ${tc.error}` : ''}
-                                    </div>
-                                ` : ''}
-                                ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
-                                ${tc.memory_used ? `<br>Memory: ${tc.memory_used}KB` : ''}
+                                <div class="mt-2">
+                                    <strong>Your Output:</strong><br>
+                                    <pre class="bg-light p-2">${tc.got || ''}</pre>
+                                </div>
                             </div>
                         `;
-                    });
-                    
-                    html += '</div>';
+                    }
+                    else {
+                        html = `
+                            <div class="alert alert-${result.status === 'AC' ? 'success' : 'danger'}">
+                                <strong>Status:</strong> ${result.status}
+                                ${result.status === 'AC' ? 
+                                    `<br><strong>Execution Time:</strong> ${result.execution_time}ms
+                                    <br><strong>Memory Used:</strong> ${result.memory_used}KB` : 
+                                    ''
+                                }
+                            </div>
+                            <div class="test-results">
+                                <h6>Test Case Result:</h6>
+                                <div class="test-case-result mb-3">
+                                    <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${tc.status}</span>
+                                    ${tc.status !== 'AC' ? `
+                                        <div class="mt-2">
+                                            <strong>Expected Output:</strong><br>
+                                            <pre class="bg-light p-2">${tc.expected || ''}</pre>
+                                            <strong>Your Output:</strong><br>
+                                            <pre class="bg-light p-2">${tc.got || ''}</pre>
+                                            ${tc.error ? `<br><strong>Error:</strong> ${tc.error}` : ''}
+                                        </div>
+                                    ` : ''}
+                                    ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
+                                    ${tc.memory_used ? `<br>Memory: ${tc.memory_used}KB` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
                 } else {
                     html = `<div class="alert alert-danger">Error: ${result.error || 'Unknown error'}</div>`;
                 }
@@ -1202,7 +1269,7 @@
                 resultsContent.innerHTML = html;
             } catch (error) {
                 console.error(error);
-                alert('An error occurred while running the code. Please try again.');
+                alertPopup('An error occurred while running the code. Please try again.', 'error');
             }
         });
 
