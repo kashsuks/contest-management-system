@@ -4,7 +4,7 @@ This guide will help you set up and run the coding contest platform locally.
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.11+ (dependency versions in `requirements.txt` are pinned to what the project is tested with)
 - For C++ submissions: g++ compiler
 - For Java submissions: JDK (Java Development Kit)
 
@@ -44,6 +44,17 @@ The judge system runs locally and supports multiple programming languages:
    - Download and install JDK from Oracle or OpenJDK
    - Set JAVA_HOME environment variable
 
+
+## Running on a contest network
+
+The server listens on all interfaces (`HOST`/`PORT` environment variables, default `0.0.0.0:5000`) and contestants open `http://<server-ip>:5000`.
+
+- Give the server machine a static or reserved IP so the address doesn't change mid-contest.
+- Allow inbound TCP port 5000 in the host firewall.
+- Some school/guest Wi-Fi networks use client isolation, which blocks device-to-device traffic. Test from a second device on the same network beforehand.
+- All front-end libraries are served from `static/vendor/`, so no internet access is needed during the contest (see `static/vendor/README.md` for versions).
+- The site uses plain HTTP, so don't let contestants reuse real passwords.
+- Keep the machine plugged in and disable sleep.
 
 ## Security Considerations
 
