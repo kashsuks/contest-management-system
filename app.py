@@ -5,10 +5,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, emit
 import json
 import os
+import re
 from datetime import datetime
 import pytz
 from judge.judge import judge_submission
 from sqlalchemy import select
+
+USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9_]{3,32}$')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key'
@@ -99,6 +102,9 @@ def index():
 def register():
     data = request.get_json()
     
+    if not USERNAME_PATTERN.match(data['username']):
+        return jsonify({'error': 'Username must be 3-32 characters: letters, digits or underscore'}), 400
+
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'error': 'Username already exists'}), 400
     
@@ -144,6 +150,9 @@ def create_user():
         return jsonify({'error': 'Unauthorized'}), 403
     
     data = request.get_json()
+    if not USERNAME_PATTERN.match(data['username']):
+        return jsonify({'error': 'Username must be 3-32 characters: letters, digits or underscore'}), 400
+
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'error': 'Username already exists'}), 400
     
