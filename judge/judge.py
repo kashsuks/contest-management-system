@@ -205,7 +205,7 @@ def judge_submission(code, language, batches, time_limit, memory_limit, is_run_c
 
                     # add specific execution time for TLE and MLE
                     time_taken = round(result.get('execution_time', 0), 2) if error != 'TLE' else f">{time_limit:.2f}"
-                    memory_taken = round(result.get('memory_used', 0), 2) if error != 'MLE' else f">{memory_limit:.2f}"
+                    memory_taken = round(result.get('memory_used', 0), 2) if error != 'MLE' else f">{memory_limit * 1024:.2f}"  # memory is reported in KB everywhere
 
                     current_batch_result['test_case_results'].append({
                         'status': result['status'],
