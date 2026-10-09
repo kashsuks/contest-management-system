@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
+from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -88,6 +89,31 @@ def init_admin():
             db.session.add(admin)
             db.session.commit()
 
+def require_json_fields(*fields):
+    """Reject requests whose JSON body is missing any of `fields` or has non-string/empty values."""
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return jsonify({'error': 'Request body must be a JSON object'}), 400
+            for field in fields:
+                value = data.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    return jsonify({'error': f'Missing or invalid field: {field}'}), 400
+            return view(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def shortname_for(index):
+    """0 -> A, 25 -> Z, 26 -> AA, ..."""
+    name = ''
+    index += 1
+    while index > 0:
+        index, rem = divmod(index - 1, 26)
+        name = chr(65 + rem) + name
+    return name
+
 # Routes
 @app.route('/')
 def index():
@@ -116,7 +142,9 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get('username'), str) or not isinstance(data.get('password'), str):
+            return jsonify({'error': 'Username and password are required'}), 400
         user = User.query.filter_by(username=data['username']).first()
         
         if user and user.check_password(data['password']):
@@ -128,6 +156,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/username')
+@login_required
 def get_username():
     return current_user.username
 
@@ -139,6 +168,7 @@ def logout():
 
 @app.route('/create_user', methods=['POST'])
 @login_required
+@require_json_fields('username', 'email', 'password')
 def create_user():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
@@ -165,39 +195,35 @@ def create_problem():
         return jsonify({'error': 'Unauthorized'}), 403
     
     try:
-        data = request.get_json()
-        print("Received data:", data)
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'error': 'Request body must be a JSON object'}), 400
         
         required_fields = ['title', 'description', 'difficulty', 'time_limit', 'memory_limit', 'batches']
         
         # Validate required fields
         for field in required_fields:
             if field not in data:
-                print(f"Missing field: {field}")
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
         # Validate batches
         if not isinstance(data['batches'], list) or len(data['batches']) == 0:
-            print("Invalid batches")
             return jsonify({'error': 'At least one batch is required'}), 400
         
         for batch in data['batches']:
             if 'points' not in batch or 'test_cases' not in batch:
-                print("Invalid batch format")
                 return jsonify({'error': 'Each batch must have points and test_cases'}), 400
             
             if not isinstance(batch['test_cases'], list) or len(batch['test_cases']) == 0:
-                print("Invalid test cases in batch")
                 return jsonify({'error': 'Each batch must have at least one test case'}), 400
             
             for test_case in batch['test_cases']:
                 if 'input' not in test_case or 'output' not in test_case:
-                    print("Invalid test case format")
                     return jsonify({'error': 'Each test case must have input and output'}), 400
         
         # Generate shortname based on problem count
         problem_count = Problem.query.count()
-        shortname = chr(65 + problem_count)  # A, B, C, etc.
+        shortname = shortname_for(problem_count)  # A, B, ..., Z, AA, ...
         
         problem = Problem(
             title=data['title'],
@@ -211,7 +237,6 @@ def create_problem():
         
         db.session.add(problem)
         db.session.commit()
-        print("Problem created successfully")
         
         # Emit WebSocket event for new problem
         socketio.emit('new_problem', {
@@ -225,9 +250,9 @@ def create_problem():
         
         return jsonify({'message': 'Problem created successfully', 'id': problem.id}), 201
     except Exception as e:
-        print("Error creating problem:", str(e))
+        app.logger.exception('Error creating problem')
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Could not create problem'}), 500
 
 @app.route('/problems')
 @login_required
@@ -271,7 +296,7 @@ def submit():
         if 'problem_id' not in data:
             return jsonify({'error': 'Problem ID is required'}), 400
             
-        if ('code' not in data) or len(data['code']) == 0:
+        if not isinstance(data.get('code'), str) or len(data['code']) == 0:
             return jsonify({'error': 'Code is required'}), 400
             
         if 'language' not in data:
@@ -318,14 +343,14 @@ def submit():
             return jsonify(result)
             
         except Exception as e:
-            print(f"Judge error: {str(e)}")
+            app.logger.exception('Judge error')
             submission.status = 'ERROR'
             db.session.commit()
-            return jsonify({'error': f'Judge error: {str(e)}'}), 500
+            return jsonify({'error': 'The judge failed to process this submission'}), 500
             
     except Exception as e:
-        print(f"Submission error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        app.logger.exception('Submission error')
+        return jsonify({'error': 'Could not process submission'}), 500
 
 @app.route('/run_code', methods=['POST'])
 @login_required
@@ -372,12 +397,12 @@ def run_code():
             return jsonify(result)
             
         except Exception as e:
-            print(f"Run error: {str(e)}")
-            return jsonify({'error': f'Run error: {str(e)}'}), 500
+            app.logger.exception('Run error')
+            return jsonify({'error': 'The judge failed to run this code'}), 500
             
     except Exception as e:
-        print(f"Run error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        app.logger.exception('Run error')
+        return jsonify({'error': 'Could not run code'}), 500
 
 @app.route('/leaderboard')
 @login_required
@@ -442,7 +467,7 @@ def get_leaderboard():
 @app.route('/submission/<int:submission_id>')
 @login_required
 def get_submission(submission_id):
-    submission = Submission.query.filter_by(user_id=current_user.id, id=submission_id).first()
+    submission = Submission.query.filter_by(user_id=current_user.id, id=submission_id).first_or_404()
     return jsonify({
         'id': submission.id,
         'user_id': submission.user_id,
@@ -500,8 +525,8 @@ def update_contest_settings():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
     
-    data = request.get_json()
-    if 'contest_name' not in data:
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('contest_name'), str):
         return jsonify({'error': 'Contest name is required'}), 400
     
     contest_config['contest_name'] = data['contest_name']
