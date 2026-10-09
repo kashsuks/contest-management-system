@@ -31,6 +31,10 @@ python setup.py
 python app.py
 ```
 
+## Admin Account
+
+On first start an `admin` user is created. Set `ADMIN_PASSWORD` (at least 8 characters) in the environment to choose its password; otherwise a random one is generated and printed once in the server output. There is no public registration: the admin creates contestant accounts from the admin panel.
+
 ## Judge System Setup
 
 The judge system runs locally and supports multiple programming languages:
