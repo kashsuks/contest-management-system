@@ -9,12 +9,42 @@ from datetime import datetime
 import pytz
 from judge.judge import judge_submission
 from sqlalchemy import select
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # reject request bodies over 5 MB
 
+MAX_CODE_LENGTH = 100_000  # characters per submission
+MAX_RUN_TEST_CASES = 5
+RUN_CODE_TIME_LIMIT = 1000  # ms; /run_code never takes limits from the client
+RUN_CODE_MEMORY_LIMIT = 256  # MB
+
+
+def rate_limit_key():
+    # Per user once logged in, per client IP otherwise
+    if current_user.is_authenticated:
+        return f'user:{current_user.get_id()}'
+    return get_remote_address()
+
+limiter = Limiter(rate_limit_key, app=app, storage_uri='memory://')
+
+@app.errorhandler(429)
+def rate_limited(e):
+    return jsonify({'error': 'Too many requests, slow down and try again shortly'}), 429
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': 'Request too large'}), 413
+
+@app.before_request
+def reject_oversized_body():
+    # Checked up front so the 413 isn't swallowed by the catch-all handlers in the views
+    if request.content_length and request.content_length > app.config['MAX_CONTENT_LENGTH']:
+        return too_large(None)
 
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -114,6 +144,7 @@ def register():
     return jsonify({'message': 'Registration successful'}), 201
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'], key_func=get_remote_address)
 def login():
     if request.method == 'POST':
         data = request.get_json()
@@ -259,6 +290,7 @@ def get_problem(problem_id):
 
 @app.route('/submit', methods=['POST'])
 @login_required
+@limiter.limit('6 per minute')
 def submit():
     if contest_config.get('submissions_stopped', False):
         return jsonify({'error': 'Submissions have been stopped'}), 400
@@ -274,6 +306,9 @@ def submit():
         if ('code' not in data) or len(data['code']) == 0:
             return jsonify({'error': 'Code is required'}), 400
             
+        if len(data['code']) > MAX_CODE_LENGTH:
+            return jsonify({'error': f'Code is too long (max {MAX_CODE_LENGTH} characters)'}), 413
+
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
 
@@ -329,7 +364,11 @@ def submit():
 
 @app.route('/run_code', methods=['POST'])
 @login_required
+@limiter.limit('20 per minute')
 def run_code():
+    if contest_config.get('submissions_stopped', False) and not current_user.is_admin:
+        return jsonify({'error': 'Submissions have been stopped'}), 400
+
     try:
         data = request.get_json()
         if not data:
@@ -341,8 +380,14 @@ def run_code():
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
             
+        if not isinstance(data['code'], str) or len(data['code']) > MAX_CODE_LENGTH:
+            return jsonify({'error': f'Code must be a string of at most {MAX_CODE_LENGTH} characters'}), 400
+
         if 'test_cases' not in data or not isinstance(data['test_cases'], list):
             return jsonify({'error': 'Test cases are required'}), 400
+
+        if not 0 < len(data['test_cases']) <= MAX_RUN_TEST_CASES:
+            return jsonify({'error': f'Provide between 1 and {MAX_RUN_TEST_CASES} test cases'}), 400
 
         # Create a single batch with the test cases
         batch = {
@@ -350,9 +395,9 @@ def run_code():
             'test_cases': data['test_cases']
         }
         
-        # Get time and memory limits from the problem if provided, otherwise use defaults
-        time_limit = data.get('time_limit', 1000)  # Default 1 second
-        memory_limit = data.get('memory_limit', 256)  # Default 256MB
+        # Limits are fixed server-side so a client can't request an unbounded run
+        time_limit = RUN_CODE_TIME_LIMIT
+        memory_limit = RUN_CODE_MEMORY_LIMIT
         
         # Run the code
         try:
