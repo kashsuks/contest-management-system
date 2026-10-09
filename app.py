@@ -16,8 +16,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
-# Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Initialize SocketIO (default CORS policy only allows same-origin connections)
+socketio = SocketIO(app)
+
+@socketio.on('connect')
+def handle_connect():
+    # Only logged-in users may receive live updates
+    if not current_user.is_authenticated:
+        return False
 
 # Load contest configuration
 def load_contest_config():
