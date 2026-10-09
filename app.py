@@ -541,5 +541,8 @@ if __name__ == '__main__':
                     'leaderboard_frozen': False
                 }, f, indent=4)
     
-    # Run the server on all network interfaces (0.0.0.0) and port 5000
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    # Debug mode (Werkzeug debugger + reloader) is opt-in: set FLASK_DEBUG=1 for local development only
+    debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
+    host = os.environ.get('HOST', '0.0.0.0')  # all interfaces so contestants on the LAN can connect
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
