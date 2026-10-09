@@ -6,3 +6,4 @@ docker
 python-dotenv
 psutil
 flask-socketio
+flask-limiter
