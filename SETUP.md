@@ -21,6 +21,12 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+3. Create your environment file and set a random `SECRET_KEY` (the app refuses to start without it):
+```bash
+cp .env.example .env
+python -c "import secrets; print(secrets.token_hex(32))"  # paste the output after SECRET_KEY=
+```
+
 4. Initialize the contest environment
 ```bash
 python setup.py
@@ -47,7 +53,7 @@ The judge system runs locally and supports multiple programming languages:
 
 ## Security Considerations
 
-1. Change the default SECRET_KEY in .env
+1. Set a unique, random SECRET_KEY in .env (never commit `.env`)
 2. Set up proper CORS configuration in production
 3. Use HTTPS in production
 4. Set up proper database backups
