@@ -50,6 +50,7 @@ def load_contest_config():
         return {'contest_name': 'Coding Contest'}  # Default name
 
 contest_config = load_contest_config()
+contest_timezone = pytz.timezone(contest_config.get('time_zone', 'UTC'))
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -92,7 +93,7 @@ class Submission(db.Model):
     execution_time = db.Column(db.Float)  # in milliseconds
     memory_used = db.Column(db.Float)  # in KB
     points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
-    submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone(contest_config.get('time_zone', 'UTC'))))
+    submitted_at = db.Column(db.DateTime, default=lambda: datetime.now(contest_timezone))
     batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
     submitted_while_frozen = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -311,14 +312,12 @@ def submit():
         problem = Problem.query.get_or_404(data['problem_id'])
         
         # Create submission record
-        count = Submission.query.count()
         submission = Submission(
             user_id=current_user.id,
             problem_id=problem.id,
             code=data['code'],
             language=data['language'],
             status='PENDING',
-            id=count,
             submitted_while_frozen=contest_config.get('leaderboard_frozen', False)
         )
         db.session.add(submission)
@@ -346,7 +345,7 @@ def submit():
             submission.memory_used = result.get('memory_used')
             submission.points_earned = result.get('points_earned', 0)
             submission.batch_results = result['batch_results']
-            result['id'] = count
+            result['id'] = submission.id
             
             # Emit WebSocket event for new submission - update leaderboard
             socketio.emit('update_leaderboard')
@@ -450,10 +449,6 @@ def get_leaderboard():
                 )
             best_submission = best_submission.order_by(Submission.points_earned.desc()).order_by(Submission.submitted_at).first()
             
-            # If leaderboard was not frozen when this submission was counted, count this submission for all subsequent displays of the leaderboard
-            if not is_frozen and best_submission:
-                best_submission.submitted_while_frozen = False
-            
             points = best_submission.points_earned if best_submission else 0
             submission_time = best_submission.submitted_at if best_submission else None
             
@@ -469,7 +464,6 @@ def get_leaderboard():
     # Sort by total points in descending order
     leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
     
-    db.session.commit()
     return jsonify({
         'problems': [{'id': p.id, 'title': p.title, 'shortname': p.shortname} for p in problems],
         'users': leaderboard_data,
@@ -549,6 +543,9 @@ def update_contest_settings():
         if contest_config['leaderboard_frozen']:
             socketio.emit('update_leaderboard', 'Leaderboard has been frozen. The displayed leaderboard may not reflect the most recent standings.')
         else:
+            # Submissions made while frozen now count, and keep counting if the board is frozen again
+            Submission.query.filter_by(submitted_while_frozen=True).update({'submitted_while_frozen': False})
+            db.session.commit()
             socketio.emit('update_leaderboard', 'Leaderboard has been unfrozen.')
     
     # Handle submissions stopped
