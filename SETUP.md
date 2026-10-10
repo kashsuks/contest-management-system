@@ -2,6 +2,17 @@
 
 This guide will help you set up and run the coding contest platform locally.
 
+## Quick setup
+
+With Python 3.11+ and Docker installed, one command does everything below (virtualenv, dependencies, `.env` with generated `SECRET_KEY` and `ADMIN_PASSWORD`, judge image, contest name/time zone):
+
+```bash
+./setup.sh           # set up
+./setup.sh --start   # set up (if needed) and start the server
+```
+
+It is safe to re-run; existing secrets and config are kept. The admin password is stored in `.env` (`grep ADMIN_PASSWORD .env`). The manual steps are below if you prefer them.
+
 ## Prerequisites
 
 - Python 3.11+ (dependency versions in `requirements.txt` are pinned to what the project is tested with)
