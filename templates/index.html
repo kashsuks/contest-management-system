@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coding Contest</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/codemirror/codemirror.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/codemirror/monokai.min.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/socket.io/socket.io.js') }}"></script>
     <style>
         * {
             margin: 0;
@@ -167,7 +167,7 @@
             <a class="navbar-brand" href="#">Coding Contest</a>
             <div class="navbar-nav ms-auto">
                 <span class="nav-item nav-link text-light" id="username"></span>
-                <a class="nav-link" href="/logout">Logout</a>
+                <form method="post" action="/logout" class="d-inline"><button type="submit" class="nav-link btn btn-link">Logout</button></form>
             </div>
         </div>
     </nav>
@@ -499,10 +499,10 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js"></script>
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/codemirror.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/mode/python.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/mode/clike.min.js') }}"></script>
     <script defer>
         // Initialize CodeMirror
         const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
@@ -821,7 +821,7 @@
                         `;
                         if (status != 'skip') {
                             innerHTML += `
-                                ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}MB]</span>
+                                ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}KB]</span>
                             `;
                         }
                         innerHTML += '<br>';
