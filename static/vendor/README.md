@@ -10,3 +10,4 @@ To upgrade, download the new version from the same source and update this list.
 | Socket.IO client | 4.0.1 | cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1 |
 | marked | 15.0.12 | cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js |
 | JSZip | 3.10.1 | cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1 |
+| DOMPurify | 3.4.16 | cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js |

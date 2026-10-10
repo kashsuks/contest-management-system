@@ -60,7 +60,7 @@
     <!-- Required JavaScript libraries -->
     <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+    <script src="{{ url_for('static', filename='vendor/dompurify/purify.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/jszip/jszip.min.js') }}"></script>
 </head>
 <body>
