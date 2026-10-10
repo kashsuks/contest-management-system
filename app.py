@@ -6,6 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, emit
 import json
 import os
+import re
 from datetime import datetime
 import pytz
 from urllib.parse import urlparse
@@ -16,6 +17,8 @@ from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
 load_dotenv()
+
+USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9_]{3,32}$')
 
 app = Flask(__name__)
 
@@ -137,7 +140,7 @@ MIN_PASSWORD_LENGTH = 8
 def init_admin():
     """Create the admin user if it doesn't exist.
 
-    The password comes from ADMIN_PASSWORD; if unset a random one is generated and printed once.
+    The password comes from ADMIN_PASSWORD.
     """
     with app.app_context():
         if not User.query.filter_by(username='admin').first():
@@ -191,6 +194,26 @@ def index():
         return redirect(url_for('login'))
     return render_template('index.html')
 
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    
+    if not USERNAME_PATTERN.match(data['username']):
+        return jsonify({'error': 'Username must be 3-32 characters: letters, digits or underscore'}), 400
+
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'Username already exists'}), 400
+    
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already exists'}), 400
+    
+    user = User(username=data['username'], email=data['email'])
+    user.set_password(data['password'])
+    
+    db.session.add(user)
+    db.session.commit()
+    
+    return jsonify({'message': 'Registration successful'}), 201
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute', methods=['POST'], key_func=get_remote_address)
 def login():
@@ -227,6 +250,8 @@ def create_user():
         return jsonify({'error': 'Unauthorized'}), 403
     
     data = request.get_json()
+    if not USERNAME_PATTERN.match(data['username']):
+        return jsonify({'error': 'Username must be 3-32 characters: letters, digits or underscore'}), 400
     if len(data['password']) < MIN_PASSWORD_LENGTH:
         return jsonify({'error': f'Password must be at least {MIN_PASSWORD_LENGTH} characters'}), 400
 

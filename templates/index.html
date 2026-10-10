@@ -8,6 +8,7 @@
     <link href="{{ url_for('static', filename='vendor/codemirror/codemirror.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='vendor/codemirror/monokai.min.css') }}" rel="stylesheet">
     <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
     <script src="{{ url_for('static', filename='vendor/socket.io/socket.io.js') }}"></script>
     <style>
         * {
@@ -504,6 +505,18 @@
     <script src="{{ url_for('static', filename='vendor/codemirror/mode/python.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/codemirror/mode/clike.min.js') }}"></script>
     <script defer>
+        // Escape any server-provided value before putting it into an HTML string
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        // Markdown -> sanitized HTML
+        function renderMarkdown(text) {
+            return DOMPurify.sanitize(marked.parse(text ?? ''));
+        }
+
         // Initialize CodeMirror
         const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
             mode: 'python',
@@ -546,7 +559,7 @@
         });
 
         // Show a notification
-        function showNotification(html) {
+        function showNotification(text) {
             // Delete previously shown notifications
             document.querySelectorAll('.notif').forEach(e => {
                 e.remove();
@@ -556,7 +569,8 @@
             const notification = document.createElement('div');
             notification.className = 'notif alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
             notification.style.zIndex = '1000';
-            notification.innerHTML = html + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+            notification.append(String(text));
+            notification.insertAdjacentHTML('beforeend', '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>');
             document.body.appendChild(notification);
 
             // Remove notification after 5 seconds
@@ -593,12 +607,12 @@
             // Create new row
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
-                <td>${problem.id}</td>
-                <td>${problem.title}</td>
-                <td>${problem.difficulty}</td>
-                <td>${problem.time_limit}ms</td>
-                <td>${problem.memory_limit}MB</td>
-                <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${problem.id})">View Problem</button></td>
+                <td>${escapeHtml(problem.id)}</td>
+                <td>${escapeHtml(problem.title)}</td>
+                <td>${escapeHtml(problem.difficulty)}</td>
+                <td>${escapeHtml(problem.time_limit)}ms</td>
+                <td>${escapeHtml(problem.memory_limit)}MB</td>
+                <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${Number(problem.id)})">View Problem</button></td>
             `;
 
             // Find the correct position to insert the new row
@@ -647,7 +661,7 @@
         });
 
         // Displays a popup box with a message
-        function alertPopup(html, mode = 'neutral') {
+        function alertPopup(text, mode = 'neutral') {
             let modeSpan = '';
             if (mode == 'success') {
                 modeSpan = `<span style="color: green; font-weight: bold;">Success</span>: `
@@ -656,7 +670,7 @@
             }
 
             const popup = document.getElementById('popup');
-            popup.querySelector('.modal-body').innerHTML = `${modeSpan}${html}`;
+            popup.querySelector('.modal-body').innerHTML = `${modeSpan}${escapeHtml(text)}`;
             const modal = new bootstrap.Modal(popup);
             modal.show();
         }
@@ -673,12 +687,12 @@
                 const problemList = document.getElementById('problemList');
                 problemList.innerHTML = problems.sort((a, b) => a.id - b.id).map(p => `
                     <tr>
-                        <td>${p.id}</td>
-                        <td>${p.title}</td>
-                        <td>${p.difficulty}</td>
-                        <td>${p.time_limit}ms</td>
-                        <td>${p.memory_limit}MB</td>
-                        <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${p.id})">View Problem</button></td>
+                        <td>${escapeHtml(p.id)}</td>
+                        <td>${escapeHtml(p.title)}</td>
+                        <td>${escapeHtml(p.difficulty)}</td>
+                        <td>${escapeHtml(p.time_limit)}ms</td>
+                        <td>${escapeHtml(p.memory_limit)}MB</td>
+                        <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${Number(p.id)})">View Problem</button></td>
                     </tr>
                 `).join('');
 
@@ -687,7 +701,7 @@
                 problemSelect.innerHTML = `
                     <option value="">Select a problem</option>
                     ${problems.map(p => `
-                        <option value="${p.id}">${p.title} (${p.difficulty})</option>
+                        <option value="${escapeHtml(p.id)}">${escapeHtml(p.title)} (${escapeHtml(p.difficulty)})</option>
                     `).join('')}
                 `;
             } catch (error) {
@@ -705,15 +719,15 @@
                 const problemContent = document.getElementById('problemContent');
                 problemContent.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3>${problem.title}</h3>
+                        <h3>${escapeHtml(problem.title)}</h3>
                         <button class="btn btn-secondary" onclick="showProblemsList()">Back to Problems</button>
                     </div>
                     <div class="mb-3">
-                        <span class="badge bg-${problem.difficulty === 'Easy' ? 'success' : problem.difficulty === 'Medium' ? 'warning' : 'danger'}">${problem.difficulty}</span>
-                        <span class="ms-2">Time Limit: ${problem.time_limit}ms</span>
-                        <span class="ms-2">Memory Limit: ${problem.memory_limit}MB</span>
+                        <span class="badge bg-${problem.difficulty === 'Easy' ? 'success' : problem.difficulty === 'Medium' ? 'warning' : 'danger'}">${escapeHtml(problem.difficulty)}</span>
+                        <span class="ms-2">Time Limit: ${escapeHtml(problem.time_limit)}ms</span>
+                        <span class="ms-2">Memory Limit: ${escapeHtml(problem.memory_limit)}MB</span>
                     </div>
-                    <div class="problem-description markdown-preview">${marked.parse(problem.description)}</div>
+                    <div class="problem-description markdown-preview">${renderMarkdown(problem.description)}</div>
                     <br>
                 `;
 
@@ -762,14 +776,14 @@
             const submissions = await response.json();
             document.getElementById('submissionsList').innerHTML = submissions.sort((a, b) => b.id - a.id).map(s => `
                 <tr>
-                    <td>${s.problem.title}</td>
-                    <td>${s.language}</td>
-                    <td><span class="badge bg-${s.status === 'AC' ? 'success' : 'danger'}">${s.status}</span></td>
-                    <td>${s.points_earned}/${s.problem.total_points}</td>
+                    <td>${escapeHtml(s.problem.title)}</td>
+                    <td>${escapeHtml(s.language)}</td>
+                    <td><span class="badge bg-${s.status === 'AC' ? 'success' : 'danger'}">${escapeHtml(s.status)}</span></td>
+                    <td>${escapeHtml(s.points_earned)}/${escapeHtml(s.problem.total_points)}</td>
                     <td>${s.execution_time ? s.execution_time.toFixed(2) + 'ms' : '-'}</td>
                     <td>${s.memory_used ? s.memory_used.toFixed(2) + 'KB' : '-'}</td>
                     <td>${new Date(s.submitted_at).toLocaleString()}</td>
-                    <td><button class="btn btn-primary btn-sm" onclick="viewSubmission(${s.id})">View</button></td>
+                    <td><button class="btn btn-primary btn-sm" onclick="viewSubmission(${Number(s.id)})">View</button></td>
                 </tr>
             `).join('');
         }
@@ -782,8 +796,8 @@
 
             viewer.innerHTML = `
                 <span><b>Submitted on</b>: ${new Date(submission.submitted_at).toLocaleString()}</span> <br>
-                <span><b>Submission for problem</b>: ${submission.problem.title}</span> <br>
-                <span><b>Points earned</b>: ${submission.points_earned}/${submission.problem.total_points}</span> <br><br>
+                <span><b>Submission for problem</b>: ${escapeHtml(submission.problem.title)}</span> <br>
+                <span><b>Points earned</b>: ${escapeHtml(submission.points_earned)}/${escapeHtml(submission.problem.total_points)}</span> <br><br>
             `;
 
             let batch_num = 1;
@@ -798,7 +812,7 @@
                 
                 let innerHTML = `
                     <span style="font-size: .83em; font-weight: bold;">Batch ${batch_num}:</span>
-                    <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span>
+                    <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${escapeHtml(status)}</span>
                 `;
 
                 if (hasManyTestCases) {
@@ -817,11 +831,11 @@
                         const status = test_case.status;
                         const indent = '<span style="display: inline-block; width: 2ch;">&#9;</span>';
                         innerHTML += `
-                            ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${status}</span></span>
+                            ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${escapeHtml(status)}</span></span>
                         `;
                         if (status != 'skip') {
                             innerHTML += `
-                                ${indent}<span>[Execution time: ${test_case.execution_time}ms, Memory: ${test_case.memory_used}KB]</span>
+                                ${indent}<span>[Execution time: ${escapeHtml(test_case.execution_time)}ms, Memory: ${escapeHtml(test_case.memory_used)}KB]</span>
                             `;
                         }
                         innerHTML += '<br>';
@@ -836,7 +850,7 @@
 
             const codeView = document.createElement('div');
             codeView.className = 'code-view';
-            codeView.innerHTML = `<code>${submission.code}</code>`;
+            codeView.innerHTML = `<code>${escapeHtml(submission.code)}</code>`;
             viewer.appendChild(document.createElement('br'));
             viewer.appendChild(codeView);
 
@@ -865,7 +879,7 @@
                 headerRow.innerHTML = `
                     <th>Rank</th>
                     <th>User</th>
-                    ${data.problems.map(p => `<th>${p.shortname}</th>`).join('')}
+                    ${data.problems.map(p => `<th>${escapeHtml(p.shortname)}</th>`).join('')}
                     <th>Total</th>
                 `;
                 
@@ -883,16 +897,16 @@
                 leaderboardList.innerHTML = data.users.map((user, index) => `
                     <tr>
                         <td>${index + 1}</td>
-                        <td>${user.username}</td>
+                        <td>${escapeHtml(user.username)}</td>
                         ${user.problem_points.map((p, i) => `
                             <td class="${firstSolves[i] === user.username ? 'bg-success bg-opacity-25' : ''}">
                                 ${p.points > 0 ? `
-                                    ${p.points}<br>
-                                    <small class="text-muted">${p.submission_time || ''}</small>
+                                    ${escapeHtml(p.points)}<br>
+                                    <small class="text-muted">${escapeHtml(p.submission_time || '')}</small>
                                 ` : '-'}
                             </td>
                         `).join('')}
-                        <td><strong>${user.total_points}</strong></td>
+                        <td><strong>${escapeHtml(user.total_points)}</strong></td>
                     </tr>
                 `).join('');
             } catch (error) {
@@ -1043,13 +1057,13 @@
                 const adminProblemList = document.getElementById('adminProblemList');
                 adminProblemList.innerHTML = problems.sort((a, b) => a.id - b.id).map(p => `
                     <tr>
-                        <td>${p.id}</td>
-                        <td>${p.title}</td>
-                        <td>${p.difficulty}</td>
-                        <td>${p.time_limit}ms</td>
-                        <td>${p.memory_limit}MB</td>
+                        <td>${escapeHtml(p.id)}</td>
+                        <td>${escapeHtml(p.title)}</td>
+                        <td>${escapeHtml(p.difficulty)}</td>
+                        <td>${escapeHtml(p.time_limit)}ms</td>
+                        <td>${escapeHtml(p.memory_limit)}MB</td>
                         <td>
-                            <button class="btn btn-primary btn-sm" onclick="loadProblem(${p.id})">View</button>
+                            <button class="btn btn-primary btn-sm" onclick="loadProblem(${Number(p.id)})">View</button>
                         </td>
                     </tr>
                 `).join('');
@@ -1228,7 +1242,7 @@
                             <div class="test-case-result mb-3">
                                 <div class="mt-2">
                                     <strong>Your Output:</strong><br>
-                                    <pre class="bg-light p-2">${tc.got || ''}</pre>
+                                    <pre class="bg-light p-2">${escapeHtml(tc.got)}</pre>
                                 </div>
                             </div>
                         `;
@@ -1236,34 +1250,34 @@
                     else {
                         html = `
                             <div class="alert alert-${result.status === 'AC' ? 'success' : 'danger'}">
-                                <strong>Status:</strong> ${result.status}
+                                <strong>Status:</strong> ${escapeHtml(result.status)}
                                 ${result.status === 'AC' ? 
-                                    `<br><strong>Execution Time:</strong> ${result.execution_time}ms
-                                    <br><strong>Memory Used:</strong> ${result.memory_used}KB` : 
+                                    `<br><strong>Execution Time:</strong> ${escapeHtml(result.execution_time)}ms
+                                    <br><strong>Memory Used:</strong> ${escapeHtml(result.memory_used)}KB` : 
                                     ''
                                 }
                             </div>
                             <div class="test-results">
                                 <h6>Test Case Result:</h6>
                                 <div class="test-case-result mb-3">
-                                    <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${tc.status}</span>
+                                    <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${escapeHtml(tc.status)}</span>
                                     ${tc.status !== 'AC' ? `
                                         <div class="mt-2">
                                             <strong>Expected Output:</strong><br>
-                                            <pre class="bg-light p-2">${tc.expected || ''}</pre>
+                                            <pre class="bg-light p-2">${escapeHtml(tc.expected)}</pre>
                                             <strong>Your Output:</strong><br>
-                                            <pre class="bg-light p-2">${tc.got || ''}</pre>
-                                            ${tc.error ? `<br><strong>Error:</strong> ${tc.error}` : ''}
+                                            <pre class="bg-light p-2">${escapeHtml(tc.got)}</pre>
+                                            ${tc.error ? `<br><strong>Error:</strong> ${escapeHtml(tc.error)}` : ''}
                                         </div>
                                     ` : ''}
-                                    ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
-                                    ${tc.memory_used ? `<br>Memory: ${tc.memory_used}KB` : ''}
+                                    ${tc.execution_time ? `<br>Time: ${escapeHtml(tc.execution_time)}ms` : ''}
+                                    ${tc.memory_used ? `<br>Memory: ${escapeHtml(tc.memory_used)}KB` : ''}
                                 </div>
                             </div>
                         `;
                     }
                 } else {
-                    html = `<div class="alert alert-danger">Error: ${result.error || 'Unknown error'}</div>`;
+                    html = `<div class="alert alert-danger">Error: ${escapeHtml(result.error || 'Unknown error')}</div>`;
                 }
                 
                 resultsContent.innerHTML = html;
@@ -1337,10 +1351,10 @@
         //                         ${tc.status !== 'AC' ? `
         //                             <div class="mt-2">
         //                                 <strong>Expected Output:</strong><br>
-        //                                 <pre class="bg-light p-2">${tc.expected || ''}</pre>
+        //                                 <pre class="bg-light p-2">${escapeHtml(tc.expected)}</pre>
         //                                 <strong>Your Output:</strong><br>
-        //                                 <pre class="bg-light p-2">${tc.got || ''}</pre>
-        //                                 ${tc.error ? `<br><strong>Error:</strong> ${tc.error}` : ''}
+        //                                 <pre class="bg-light p-2">${escapeHtml(tc.got)}</pre>
+        //                                 ${tc.error ? `<br><strong>Error:</strong> ${escapeHtml(tc.error)}` : ''}
         //                             </div>
         //                         ` : ''}
         //                         ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
