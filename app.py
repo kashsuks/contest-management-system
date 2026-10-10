@@ -6,7 +6,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, emit
 import json
 import os
-import secrets
 from datetime import datetime
 import pytz
 from urllib.parse import urlparse
@@ -143,18 +142,15 @@ def init_admin():
     with app.app_context():
         if not User.query.filter_by(username='admin').first():
             password = os.environ.get('ADMIN_PASSWORD')
-            generated = not password
-            if generated:
-                password = secrets.token_urlsafe(12)
-            elif len(password) < MIN_PASSWORD_LENGTH:
+            if not password:
+                raise RuntimeError('ADMIN_PASSWORD is not set. Copy .env.example to .env and set ADMIN_PASSWORD.')
+            if len(password) < MIN_PASSWORD_LENGTH:
                 raise RuntimeError(f'ADMIN_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters')
 
             admin = User(username='admin', email='admin@example.com', is_admin=True)
             admin.set_password(password)
             db.session.add(admin)
             db.session.commit()
-            if generated:
-                print(f'Created admin user. Username: admin  Password: {password}  (shown once; set ADMIN_PASSWORD to choose your own)')
 
 @app.before_request
 def reject_cross_origin_posts():
