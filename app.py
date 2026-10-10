@@ -526,7 +526,9 @@ def update_contest_settings():
 
 if __name__ == '__main__':
     with app.app_context():
-        db.drop_all()
+        # Data is kept across restarts; wiping it must be requested explicitly (RESET_DB=1)
+        if os.environ.get('RESET_DB', '0').lower() in ('1', 'true', 'yes'):
+            db.drop_all()
         db.create_all()
         
         # Initialize admin user
