@@ -194,26 +194,6 @@ def index():
         return redirect(url_for('login'))
     return render_template('index.html')
 
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    
-    if not USERNAME_PATTERN.match(data['username']):
-        return jsonify({'error': 'Username must be 3-32 characters: letters, digits or underscore'}), 400
-
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username already exists'}), 400
-    
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 400
-    
-    user = User(username=data['username'], email=data['email'])
-    user.set_password(data['password'])
-    
-    db.session.add(user)
-    db.session.commit()
-    
-    return jsonify({'message': 'Registration successful'}), 201
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute', methods=['POST'], key_func=get_remote_address)
 def login():
