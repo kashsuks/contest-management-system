@@ -21,10 +21,11 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Create your environment file and set a random `SECRET_KEY` (the app refuses to start without it):
+3. Create your environment file and set `SECRET_KEY` and `ADMIN_PASSWORD` (the app refuses to start without them):
 ```bash
 cp .env.example .env
 python -c "import secrets; print(secrets.token_hex(32))"  # paste the output after SECRET_KEY=
+# then set ADMIN_PASSWORD= to a password of at least 8 characters
 ```
 
 4. Initialize the contest environment
@@ -39,7 +40,7 @@ python app.py
 
 ## Admin Account
 
-On first start an `admin` user is created. Set `ADMIN_PASSWORD` (at least 8 characters) in the environment to choose its password; otherwise a random one is generated and printed once in the server output. There is no public registration: the admin creates contestant accounts from the admin panel.
+On first start an `admin` user is created with the password from `ADMIN_PASSWORD` (at least 8 characters, set in `.env`); the app refuses to start without it. The password is never printed or logged. There is no public registration: the admin creates contestant accounts from the admin panel.
 
 ## Judge System Setup
 
