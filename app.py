@@ -105,7 +105,7 @@ MIN_PASSWORD_LENGTH = 8
 def init_admin():
     """Create the admin user if it doesn't exist.
 
-    The password comes from ADMIN_PASSWORD; if unset a random one is generated and printed once.
+    The password comes from ADMIN_PASSWORD; if unset a random one is generated.
     """
     with app.app_context():
         if not User.query.filter_by(username='admin').first():
@@ -121,7 +121,7 @@ def init_admin():
             db.session.add(admin)
             db.session.commit()
             if generated:
-                print(f'Created admin user. Username: admin  Password: {password}  (shown once; set ADMIN_PASSWORD to choose your own)')
+                print('Created admin user with a generated password. Set ADMIN_PASSWORD to a known value and recreate the user if needed.')
 
 # Routes
 @app.route('/')
