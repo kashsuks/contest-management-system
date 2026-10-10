@@ -9,9 +9,20 @@ from datetime import datetime
 import pytz
 from judge.judge import judge_submission
 from sqlalchemy import select
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'key'
+
+# The secret key signs session cookies, so it must never be a shared/default value
+secret_key = os.environ.get('SECRET_KEY')
+if not secret_key:
+    raise RuntimeError(
+        "SECRET_KEY is not set. Copy .env.example to .env and set a random value, e.g. "
+        "python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+app.config['SECRET_KEY'] = secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 

@@ -5,3 +5,4 @@
 /config
 coding_contest.db
 .DS_STORE
+.env
