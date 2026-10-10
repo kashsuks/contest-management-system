@@ -33,17 +33,18 @@ python app.py
 
 ## Judge System Setup
 
-The judge system runs locally and supports multiple programming languages:
+Contestant code is compiled and run inside a throwaway Docker container (no network, read-only filesystem, dropped capabilities, non-root user, memory / pid / CPU limits). Python, C++ (g++) and Java (JDK) are provided by the image, so you only need Docker on the machine running the server.
 
-1. Python (built-in, no additional setup needed)
-2. C++ (requires g++ compiler)
-   - Windows: Install MinGW
-   - Linux: `sudo apt-get install g++`
-   - macOS: `brew install gcc`
-3. Java (requires JDK)
-   - Download and install JDK from Oracle or OpenJDK
-   - Set JAVA_HOME environment variable
+1. Install and start Docker (Docker Desktop on macOS/Windows, `docker.io` on Linux).
+2. Build the judge image once:
+```bash
+docker build -t cms-judge judge/
+```
+3. Start the server as usual. If Docker or the image is missing, submissions fail with a judge error; they are never run unsandboxed.
 
+Environment variables:
+- `JUDGE_IMAGE` - image name (default `cms-judge`)
+- `JUDGE_SANDBOX=local` - **development only**: run submissions directly on this machine (needs local `g++` / JDK). Never use this for a real contest.
 
 ## Running on a contest network
 
