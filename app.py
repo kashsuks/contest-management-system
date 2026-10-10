@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for
+from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -6,11 +7,13 @@ from flask_socketio import SocketIO, emit
 import json
 import os
 import re
-import secrets
 from datetime import datetime
 import pytz
+from urllib.parse import urlparse
 from judge.judge import judge_submission
 from sqlalchemy import select
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,7 +32,38 @@ if not secret_key:
 app.config['SECRET_KEY'] = secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # reject request bodies over 5 MB
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# SESSION_COOKIE_SECURE is intentionally left off: the contest is served over plain HTTP on a LAN IP
 
+MAX_CODE_LENGTH = 100_000  # characters per submission
+MAX_RUN_TEST_CASES = 5
+RUN_CODE_TIME_LIMIT = 1000  # ms; /run_code never takes limits from the client
+RUN_CODE_MEMORY_LIMIT = 256  # MB
+
+
+def rate_limit_key():
+    # Per user once logged in, per client IP otherwise
+    if current_user.is_authenticated:
+        return f'user:{current_user.get_id()}'
+    return get_remote_address()
+
+limiter = Limiter(rate_limit_key, app=app, storage_uri='memory://')
+
+@app.errorhandler(429)
+def rate_limited(e):
+    return jsonify({'error': 'Too many requests, slow down and try again shortly'}), 429
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': 'Request too large'}), 413
+
+@app.before_request
+def reject_oversized_body():
+    # Checked up front so the 413 isn't swallowed by the catch-all handlers in the views
+    if request.content_length and request.content_length > app.config['MAX_CONTENT_LENGTH']:
+        return too_large(None)
 
 # Initialize SocketIO (default CORS policy only allows same-origin connections)
 socketio = SocketIO(app)
@@ -49,6 +83,7 @@ def load_contest_config():
         return {'contest_name': 'Coding Contest'}  # Default name
 
 contest_config = load_contest_config()
+contest_timezone = pytz.timezone(contest_config.get('time_zone', 'UTC'))
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -91,7 +126,7 @@ class Submission(db.Model):
     execution_time = db.Column(db.Float)  # in milliseconds
     memory_used = db.Column(db.Float)  # in KB
     points_earned = db.Column(db.Integer, default=0)  # Points earned for this submission
-    submitted_at = db.Column(db.DateTime, default=datetime.now(pytz.timezone(contest_config.get('time_zone', 'UTC'))))
+    submitted_at = db.Column(db.DateTime, default=lambda: datetime.now(contest_timezone))
     batch_results = db.Column(db.JSON) # List of batches, containing result of each test case
     submitted_while_frozen = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -105,23 +140,52 @@ MIN_PASSWORD_LENGTH = 8
 def init_admin():
     """Create the admin user if it doesn't exist.
 
-    The password comes from ADMIN_PASSWORD; if unset a random one is generated.
+    The password comes from ADMIN_PASSWORD.
     """
     with app.app_context():
         if not User.query.filter_by(username='admin').first():
             password = os.environ.get('ADMIN_PASSWORD')
-            generated = not password
-            if generated:
-                password = secrets.token_urlsafe(12)
-            elif len(password) < MIN_PASSWORD_LENGTH:
+            if not password:
+                raise RuntimeError('ADMIN_PASSWORD is not set. Copy .env.example to .env and set ADMIN_PASSWORD.')
+            if len(password) < MIN_PASSWORD_LENGTH:
                 raise RuntimeError(f'ADMIN_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters')
 
             admin = User(username='admin', email='admin@example.com', is_admin=True)
             admin.set_password(password)
             db.session.add(admin)
             db.session.commit()
-            if generated:
-                print('Created admin user with a generated password. Set ADMIN_PASSWORD to a known value and recreate the user if needed.')
+
+@app.before_request
+def reject_cross_origin_posts():
+    # Browsers always send Origin on cross-site POSTs; refuse any that don't come from this host
+    origin = request.headers.get('Origin')
+    if request.method == 'POST' and origin and urlparse(origin).netloc != request.host:
+        return jsonify({'error': 'Cross-origin request blocked'}), 403
+
+def require_json_fields(*fields):
+    """Reject requests whose JSON body is missing any of `fields` or has non-string/empty values."""
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                return jsonify({'error': 'Request body must be a JSON object'}), 400
+            for field in fields:
+                value = data.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    return jsonify({'error': f'Missing or invalid field: {field}'}), 400
+            return view(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def shortname_for(index):
+    """0 -> A, 25 -> Z, 26 -> AA, ..."""
+    name = ''
+    index += 1
+    while index > 0:
+        index, rem = divmod(index - 1, 26)
+        name = chr(65 + rem) + name
+    return name
 
 # Routes
 @app.route('/')
@@ -151,9 +215,12 @@ def register():
     
     return jsonify({'message': 'Registration successful'}), 201
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'], key_func=get_remote_address)
 def login():
     if request.method == 'POST':
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get('username'), str) or not isinstance(data.get('password'), str):
+            return jsonify({'error': 'Username and password are required'}), 400
         user = User.query.filter_by(username=data['username']).first()
         
         if user and user.check_password(data['password']):
@@ -165,17 +232,19 @@ def login():
     return render_template('login.html')
 
 @app.route('/username')
+@login_required
 def get_username():
     return current_user.username
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('login'))
+    return redirect(url_for('login'), code=303)
 
 @app.route('/create_user', methods=['POST'])
 @login_required
+@require_json_fields('username', 'email', 'password')
 def create_user():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
@@ -207,39 +276,35 @@ def create_problem():
         return jsonify({'error': 'Unauthorized'}), 403
     
     try:
-        data = request.get_json()
-        print("Received data:", data)
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'error': 'Request body must be a JSON object'}), 400
         
         required_fields = ['title', 'description', 'difficulty', 'time_limit', 'memory_limit', 'batches']
         
         # Validate required fields
         for field in required_fields:
             if field not in data:
-                print(f"Missing field: {field}")
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
         # Validate batches
         if not isinstance(data['batches'], list) or len(data['batches']) == 0:
-            print("Invalid batches")
             return jsonify({'error': 'At least one batch is required'}), 400
         
         for batch in data['batches']:
             if 'points' not in batch or 'test_cases' not in batch:
-                print("Invalid batch format")
                 return jsonify({'error': 'Each batch must have points and test_cases'}), 400
             
             if not isinstance(batch['test_cases'], list) or len(batch['test_cases']) == 0:
-                print("Invalid test cases in batch")
                 return jsonify({'error': 'Each batch must have at least one test case'}), 400
             
             for test_case in batch['test_cases']:
                 if 'input' not in test_case or 'output' not in test_case:
-                    print("Invalid test case format")
                     return jsonify({'error': 'Each test case must have input and output'}), 400
         
         # Generate shortname based on problem count
         problem_count = Problem.query.count()
-        shortname = chr(65 + problem_count)  # A, B, C, etc.
+        shortname = shortname_for(problem_count)  # A, B, ..., Z, AA, ...
         
         problem = Problem(
             title=data['title'],
@@ -253,7 +318,6 @@ def create_problem():
         
         db.session.add(problem)
         db.session.commit()
-        print("Problem created successfully")
         
         # Emit WebSocket event for new problem
         socketio.emit('new_problem', {
@@ -267,9 +331,9 @@ def create_problem():
         
         return jsonify({'message': 'Problem created successfully', 'id': problem.id}), 201
     except Exception as e:
-        print("Error creating problem:", str(e))
+        app.logger.exception('Error creating problem')
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Could not create problem'}), 500
 
 @app.route('/problems')
 @login_required
@@ -304,6 +368,7 @@ def get_problem(problem_id):
 
 @app.route('/submit', methods=['POST'])
 @login_required
+@limiter.limit('6 per minute')
 def submit():
     if contest_config.get('submissions_stopped', False):
         return jsonify({'error': 'Submissions have been stopped'}), 400
@@ -316,23 +381,24 @@ def submit():
         if 'problem_id' not in data:
             return jsonify({'error': 'Problem ID is required'}), 400
             
-        if ('code' not in data) or len(data['code']) == 0:
+        if not isinstance(data.get('code'), str) or len(data['code']) == 0:
             return jsonify({'error': 'Code is required'}), 400
             
+        if len(data['code']) > MAX_CODE_LENGTH:
+            return jsonify({'error': f'Code is too long (max {MAX_CODE_LENGTH} characters)'}), 413
+
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
 
         problem = Problem.query.get_or_404(data['problem_id'])
         
         # Create submission record
-        count = Submission.query.count()
         submission = Submission(
             user_id=current_user.id,
             problem_id=problem.id,
             code=data['code'],
             language=data['language'],
             status='PENDING',
-            id=count,
             submitted_while_frozen=contest_config.get('leaderboard_frozen', False)
         )
         db.session.add(submission)
@@ -360,7 +426,7 @@ def submit():
             submission.memory_used = result.get('memory_used')
             submission.points_earned = result.get('points_earned', 0)
             submission.batch_results = result['batch_results']
-            result['id'] = count
+            result['id'] = submission.id
             
             # Emit WebSocket event for new submission - update leaderboard
             socketio.emit('update_leaderboard')
@@ -369,18 +435,22 @@ def submit():
             return jsonify(result)
             
         except Exception as e:
-            print(f"Judge error: {str(e)}")
+            app.logger.exception('Judge error')
             submission.status = 'ERROR'
             db.session.commit()
-            return jsonify({'error': f'Judge error: {str(e)}'}), 500
+            return jsonify({'error': 'The judge failed to process this submission'}), 500
             
     except Exception as e:
-        print(f"Submission error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        app.logger.exception('Submission error')
+        return jsonify({'error': 'Could not process submission'}), 500
 
 @app.route('/run_code', methods=['POST'])
 @login_required
+@limiter.limit('20 per minute')
 def run_code():
+    if contest_config.get('submissions_stopped', False) and not current_user.is_admin:
+        return jsonify({'error': 'Submissions have been stopped'}), 400
+
     try:
         data = request.get_json()
         if not data:
@@ -392,8 +462,14 @@ def run_code():
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
             
+        if not isinstance(data['code'], str) or len(data['code']) > MAX_CODE_LENGTH:
+            return jsonify({'error': f'Code must be a string of at most {MAX_CODE_LENGTH} characters'}), 400
+
         if 'test_cases' not in data or not isinstance(data['test_cases'], list):
             return jsonify({'error': 'Test cases are required'}), 400
+
+        if not 0 < len(data['test_cases']) <= MAX_RUN_TEST_CASES:
+            return jsonify({'error': f'Provide between 1 and {MAX_RUN_TEST_CASES} test cases'}), 400
 
         # Create a single batch with the test cases
         batch = {
@@ -401,9 +477,9 @@ def run_code():
             'test_cases': data['test_cases']
         }
         
-        # Get time and memory limits from the problem if provided, otherwise use defaults
-        time_limit = data.get('time_limit', 1000)  # Default 1 second
-        memory_limit = data.get('memory_limit', 256)  # Default 256MB
+        # Limits are fixed server-side so a client can't request an unbounded run
+        time_limit = RUN_CODE_TIME_LIMIT
+        memory_limit = RUN_CODE_MEMORY_LIMIT
         
         # Run the code
         try:
@@ -423,12 +499,12 @@ def run_code():
             return jsonify(result)
             
         except Exception as e:
-            print(f"Run error: {str(e)}")
-            return jsonify({'error': f'Run error: {str(e)}'}), 500
+            app.logger.exception('Run error')
+            return jsonify({'error': 'The judge failed to run this code'}), 500
             
     except Exception as e:
-        print(f"Run error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        app.logger.exception('Run error')
+        return jsonify({'error': 'Could not run code'}), 500
 
 @app.route('/leaderboard')
 @login_required
@@ -464,10 +540,6 @@ def get_leaderboard():
                 )
             best_submission = best_submission.order_by(Submission.points_earned.desc()).order_by(Submission.submitted_at).first()
             
-            # If leaderboard was not frozen when this submission was counted, count this submission for all subsequent displays of the leaderboard
-            if not is_frozen and best_submission:
-                best_submission.submitted_while_frozen = False
-            
             points = best_submission.points_earned if best_submission else 0
             submission_time = best_submission.submitted_at if best_submission else None
             
@@ -483,7 +555,6 @@ def get_leaderboard():
     # Sort by total points in descending order
     leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
     
-    db.session.commit()
     return jsonify({
         'problems': [{'id': p.id, 'title': p.title, 'shortname': p.shortname} for p in problems],
         'users': leaderboard_data,
@@ -493,7 +564,7 @@ def get_leaderboard():
 @app.route('/submission/<int:submission_id>')
 @login_required
 def get_submission(submission_id):
-    submission = Submission.query.filter_by(user_id=current_user.id, id=submission_id).first()
+    submission = Submission.query.filter_by(user_id=current_user.id, id=submission_id).first_or_404()
     return jsonify({
         'id': submission.id,
         'user_id': submission.user_id,
@@ -551,8 +622,8 @@ def update_contest_settings():
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
     
-    data = request.get_json()
-    if 'contest_name' not in data:
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('contest_name'), str):
         return jsonify({'error': 'Contest name is required'}), 400
     
     contest_config['contest_name'] = data['contest_name']
@@ -563,6 +634,9 @@ def update_contest_settings():
         if contest_config['leaderboard_frozen']:
             socketio.emit('update_leaderboard', 'Leaderboard has been frozen. The displayed leaderboard may not reflect the most recent standings.')
         else:
+            # Submissions made while frozen now count, and keep counting if the board is frozen again
+            Submission.query.filter_by(submitted_while_frozen=True).update({'submitted_while_frozen': False})
+            db.session.commit()
             socketio.emit('update_leaderboard', 'Leaderboard has been unfrozen.')
     
     # Handle submissions stopped
