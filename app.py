@@ -6,12 +6,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, emit
 import json
 import os
-import secrets
 from datetime import datetime
 import pytz
 from urllib.parse import urlparse
 from judge.judge import judge_submission
 from sqlalchemy import select
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,10 +29,38 @@ if not secret_key:
 app.config['SECRET_KEY'] = secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # reject request bodies over 5 MB
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # SESSION_COOKIE_SECURE is intentionally left off: the contest is served over plain HTTP on a LAN IP
 
+MAX_CODE_LENGTH = 100_000  # characters per submission
+MAX_RUN_TEST_CASES = 5
+RUN_CODE_TIME_LIMIT = 1000  # ms; /run_code never takes limits from the client
+RUN_CODE_MEMORY_LIMIT = 256  # MB
+
+
+def rate_limit_key():
+    # Per user once logged in, per client IP otherwise
+    if current_user.is_authenticated:
+        return f'user:{current_user.get_id()}'
+    return get_remote_address()
+
+limiter = Limiter(rate_limit_key, app=app, storage_uri='memory://')
+
+@app.errorhandler(429)
+def rate_limited(e):
+    return jsonify({'error': 'Too many requests, slow down and try again shortly'}), 429
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'error': 'Request too large'}), 413
+
+@app.before_request
+def reject_oversized_body():
+    # Checked up front so the 413 isn't swallowed by the catch-all handlers in the views
+    if request.content_length and request.content_length > app.config['MAX_CONTENT_LENGTH']:
+        return too_large(None)
 
 # Initialize SocketIO (default CORS policy only allows same-origin connections)
 socketio = SocketIO(app)
@@ -113,18 +142,15 @@ def init_admin():
     with app.app_context():
         if not User.query.filter_by(username='admin').first():
             password = os.environ.get('ADMIN_PASSWORD')
-            generated = not password
-            if generated:
-                password = secrets.token_urlsafe(12)
-            elif len(password) < MIN_PASSWORD_LENGTH:
+            if not password:
+                raise RuntimeError('ADMIN_PASSWORD is not set. Copy .env.example to .env and set ADMIN_PASSWORD.')
+            if len(password) < MIN_PASSWORD_LENGTH:
                 raise RuntimeError(f'ADMIN_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters')
 
             admin = User(username='admin', email='admin@example.com', is_admin=True)
             admin.set_password(password)
             db.session.add(admin)
             db.session.commit()
-            if generated:
-                print(f'Created admin user. Username: admin  Password: {password}  (shown once; set ADMIN_PASSWORD to choose your own)')
 
 @app.before_request
 def reject_cross_origin_posts():
@@ -166,6 +192,7 @@ def index():
     return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'], key_func=get_remote_address)
 def login():
     if request.method == 'POST':
         data = request.get_json(silent=True)
@@ -316,6 +343,7 @@ def get_problem(problem_id):
 
 @app.route('/submit', methods=['POST'])
 @login_required
+@limiter.limit('6 per minute')
 def submit():
     if contest_config.get('submissions_stopped', False):
         return jsonify({'error': 'Submissions have been stopped'}), 400
@@ -331,6 +359,9 @@ def submit():
         if not isinstance(data.get('code'), str) or len(data['code']) == 0:
             return jsonify({'error': 'Code is required'}), 400
             
+        if len(data['code']) > MAX_CODE_LENGTH:
+            return jsonify({'error': f'Code is too long (max {MAX_CODE_LENGTH} characters)'}), 413
+
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
 
@@ -390,7 +421,11 @@ def submit():
 
 @app.route('/run_code', methods=['POST'])
 @login_required
+@limiter.limit('20 per minute')
 def run_code():
+    if contest_config.get('submissions_stopped', False) and not current_user.is_admin:
+        return jsonify({'error': 'Submissions have been stopped'}), 400
+
     try:
         data = request.get_json()
         if not data:
@@ -402,8 +437,14 @@ def run_code():
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
             
+        if not isinstance(data['code'], str) or len(data['code']) > MAX_CODE_LENGTH:
+            return jsonify({'error': f'Code must be a string of at most {MAX_CODE_LENGTH} characters'}), 400
+
         if 'test_cases' not in data or not isinstance(data['test_cases'], list):
             return jsonify({'error': 'Test cases are required'}), 400
+
+        if not 0 < len(data['test_cases']) <= MAX_RUN_TEST_CASES:
+            return jsonify({'error': f'Provide between 1 and {MAX_RUN_TEST_CASES} test cases'}), 400
 
         # Create a single batch with the test cases
         batch = {
@@ -411,9 +452,9 @@ def run_code():
             'test_cases': data['test_cases']
         }
         
-        # Get time and memory limits from the problem if provided, otherwise use defaults
-        time_limit = data.get('time_limit', 1000)  # Default 1 second
-        memory_limit = data.get('memory_limit', 256)  # Default 256MB
+        # Limits are fixed server-side so a client can't request an unbounded run
+        time_limit = RUN_CODE_TIME_LIMIT
+        memory_limit = RUN_CODE_MEMORY_LIMIT
         
         # Run the code
         try:
