@@ -6,21 +6,39 @@ from flask_socketio import SocketIO, emit
 import json
 import os
 import re
+import secrets
 from datetime import datetime
 import pytz
 from judge.judge import judge_submission
 from sqlalchemy import select
+from dotenv import load_dotenv
+
+load_dotenv()
 
 USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9_]{3,32}$')
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'key'
+
+# The secret key signs session cookies, so it must never be a shared/default value
+secret_key = os.environ.get('SECRET_KEY')
+if not secret_key:
+    raise RuntimeError(
+        "SECRET_KEY is not set. Copy .env.example to .env and set a random value, e.g. "
+        "python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+app.config['SECRET_KEY'] = secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
-# Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Initialize SocketIO (default CORS policy only allows same-origin connections)
+socketio = SocketIO(app)
+
+@socketio.on('connect')
+def handle_connect():
+    # Only logged-in users may receive live updates
+    if not current_user.is_authenticated:
+        return False
 
 # Load contest configuration
 def load_contest_config():
@@ -82,14 +100,28 @@ def load_user(user_id):
     stmt = select(User).where(User.id == int(user_id))
     return db.session.execute(stmt).scalar_one_or_none()
 
+MIN_PASSWORD_LENGTH = 8
+
 def init_admin():
-    """Initialize admin user if it doesn't exist"""
+    """Create the admin user if it doesn't exist.
+
+    The password comes from ADMIN_PASSWORD; if unset a random one is generated and printed once.
+    """
     with app.app_context():
         if not User.query.filter_by(username='admin').first():
+            password = os.environ.get('ADMIN_PASSWORD')
+            generated = not password
+            if generated:
+                password = secrets.token_urlsafe(12)
+            elif len(password) < MIN_PASSWORD_LENGTH:
+                raise RuntimeError(f'ADMIN_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters')
+
             admin = User(username='admin', email='admin@example.com', is_admin=True)
-            admin.set_password('admin')
+            admin.set_password(password)
             db.session.add(admin)
             db.session.commit()
+            if generated:
+                print(f'Created admin user. Username: admin  Password: {password}  (shown once; set ADMIN_PASSWORD to choose your own)')
 
 # Routes
 @app.route('/')
@@ -118,7 +150,6 @@ def register():
     db.session.commit()
     
     return jsonify({'message': 'Registration successful'}), 201
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -152,6 +183,8 @@ def create_user():
     data = request.get_json()
     if not USERNAME_PATTERN.match(data['username']):
         return jsonify({'error': 'Username must be 3-32 characters: letters, digits or underscore'}), 400
+    if len(data['password']) < MIN_PASSWORD_LENGTH:
+        return jsonify({'error': f'Password must be at least {MIN_PASSWORD_LENGTH} characters'}), 400
 
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'error': 'Username already exists'}), 400
@@ -255,16 +288,19 @@ def get_problems():
 @login_required
 def get_problem(problem_id):
     problem = Problem.query.get_or_404(problem_id)
-    return jsonify({
+    data = {
         'id': problem.id,
         'title': problem.title,
         'shortname': problem.shortname,
         'description': problem.description,
         'difficulty': problem.difficulty,
         'time_limit': problem.time_limit,
-        'memory_limit': problem.memory_limit,
-        'batches': problem.batches
-    })
+        'memory_limit': problem.memory_limit
+    }
+    # Test cases are hidden from contestants
+    if current_user.is_admin:
+        data['batches'] = problem.batches
+    return jsonify(data)
 
 @app.route('/submit', methods=['POST'])
 @login_required
@@ -312,6 +348,12 @@ def submit():
                 memory_limit=problem.memory_limit
             )
             
+            # Never reveal hidden test output to the contestant
+            for batch_result in result['batch_results']:
+                for test_case_result in batch_result['test_case_results']:
+                    test_case_result.pop('expected', None)
+                    test_case_result.pop('got', None)
+
             # Update submission record
             submission.status = result['status']
             submission.execution_time = result.get('execution_time')
@@ -535,7 +577,9 @@ def update_contest_settings():
 
 if __name__ == '__main__':
     with app.app_context():
-        db.drop_all()
+        # Data is kept across restarts; wiping it must be requested explicitly (RESET_DB=1)
+        if os.environ.get('RESET_DB', '0').lower() in ('1', 'true', 'yes'):
+            db.drop_all()
         db.create_all()
         
         # Initialize admin user
@@ -550,5 +594,8 @@ if __name__ == '__main__':
                     'leaderboard_frozen': False
                 }, f, indent=4)
     
-    # Run the server on all network interfaces (0.0.0.0) and port 5000
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    # Debug mode (Werkzeug debugger + reloader) is opt-in: set FLASK_DEBUG=1 for local development only
+    debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
+    host = os.environ.get('HOST', '0.0.0.0')  # all interfaces so contestants on the LAN can connect
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
