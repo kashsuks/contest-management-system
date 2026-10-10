@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, emit
 import json
 import os
+import secrets
 from datetime import datetime
 import pytz
 from judge.judge import judge_submission
@@ -90,14 +91,28 @@ def load_user(user_id):
     stmt = select(User).where(User.id == int(user_id))
     return db.session.execute(stmt).scalar_one_or_none()
 
+MIN_PASSWORD_LENGTH = 8
+
 def init_admin():
-    """Initialize admin user if it doesn't exist"""
+    """Create the admin user if it doesn't exist.
+
+    The password comes from ADMIN_PASSWORD; if unset a random one is generated and printed once.
+    """
     with app.app_context():
         if not User.query.filter_by(username='admin').first():
+            password = os.environ.get('ADMIN_PASSWORD')
+            generated = not password
+            if generated:
+                password = secrets.token_urlsafe(12)
+            elif len(password) < MIN_PASSWORD_LENGTH:
+                raise RuntimeError(f'ADMIN_PASSWORD must be at least {MIN_PASSWORD_LENGTH} characters')
+
             admin = User(username='admin', email='admin@example.com', is_admin=True)
-            admin.set_password('admin')
+            admin.set_password(password)
             db.session.add(admin)
             db.session.commit()
+            if generated:
+                print(f'Created admin user. Username: admin  Password: {password}  (shown once; set ADMIN_PASSWORD to choose your own)')
 
 # Routes
 @app.route('/')
@@ -105,24 +120,6 @@ def index():
     if not current_user.is_authenticated:
         return redirect(url_for('login'))
     return render_template('index.html')
-
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username already exists'}), 400
-    
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 400
-    
-    user = User(username=data['username'], email=data['email'])
-    user.set_password(data['password'])
-    
-    db.session.add(user)
-    db.session.commit()
-    
-    return jsonify({'message': 'Registration successful'}), 201
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -155,6 +152,9 @@ def create_user():
         return jsonify({'error': 'Unauthorized'}), 403
     
     data = request.get_json()
+    if len(data['password']) < MIN_PASSWORD_LENGTH:
+        return jsonify({'error': f'Password must be at least {MIN_PASSWORD_LENGTH} characters'}), 400
+
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'error': 'Username already exists'}), 400
     

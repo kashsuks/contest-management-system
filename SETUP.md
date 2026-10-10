@@ -37,6 +37,10 @@ python setup.py
 python app.py
 ```
 
+## Admin Account
+
+On first start an `admin` user is created. Set `ADMIN_PASSWORD` (at least 8 characters) in the environment to choose its password; otherwise a random one is generated and printed once in the server output. There is no public registration: the admin creates contestant accounts from the admin panel.
+
 ## Judge System Setup
 
 Contestant code is compiled and run inside a throwaway Docker container (no network, read-only filesystem, dropped capabilities, non-root user, memory / pid / CPU limits). Python, C++ (g++) and Java (JDK) are provided by the image, so you only need Docker on the machine running the server.

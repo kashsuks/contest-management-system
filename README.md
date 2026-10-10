@@ -4,7 +4,7 @@ An in-person coding contest platform built using modern technologies
 
 ## Features
 
-- User authentication (register, login, logout)
+- User authentication (login, logout; accounts are created by an admin)
 - Problem listing with search functionality
 - Code editor with syntax highlighting
 - Support for multiple programming languages (C++, Java, Python)
