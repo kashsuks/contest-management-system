@@ -257,16 +257,19 @@ def get_problems():
 @login_required
 def get_problem(problem_id):
     problem = Problem.query.get_or_404(problem_id)
-    return jsonify({
+    data = {
         'id': problem.id,
         'title': problem.title,
         'shortname': problem.shortname,
         'description': problem.description,
         'difficulty': problem.difficulty,
         'time_limit': problem.time_limit,
-        'memory_limit': problem.memory_limit,
-        'batches': problem.batches
-    })
+        'memory_limit': problem.memory_limit
+    }
+    # Test cases are hidden from contestants
+    if current_user.is_admin:
+        data['batches'] = problem.batches
+    return jsonify(data)
 
 @app.route('/submit', methods=['POST'])
 @login_required
@@ -314,6 +317,12 @@ def submit():
                 memory_limit=problem.memory_limit
             )
             
+            # Never reveal hidden test output to the contestant
+            for batch_result in result['batch_results']:
+                for test_case_result in batch_result['test_case_results']:
+                    test_case_result.pop('expected', None)
+                    test_case_result.pop('got', None)
+
             # Update submission record
             submission.status = result['status']
             submission.execution_time = result.get('execution_time')
