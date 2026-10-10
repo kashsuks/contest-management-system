@@ -60,6 +60,7 @@
     <!-- Required JavaScript libraries -->
     <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
     <script src="{{ url_for('static', filename='vendor/jszip/jszip.min.js') }}"></script>
 </head>
 <body>
@@ -211,7 +212,7 @@
 
         // update preview of problem description for markdown
         function updatePreview(text) {
-            document.getElementById("preview").innerHTML = marked.parse(text);
+            document.getElementById("preview").innerHTML = DOMPurify.sanitize(marked.parse(text));
         }
 
         // add test case to batch
@@ -221,10 +222,14 @@
             const tr = document.createElement("tr");
             tr.className = "test-case";
             tr.innerHTML = `
-                <td><textarea type="text" class="form-control mb-2" required placeholder="Input">${input_text}</textarea></td>
-                <td><textarea type="text" class="form-control" required placeholder="Output">${output_text}</textarea></td>
+                <td><textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea></td>
+                <td><textarea type="text" class="form-control" required placeholder="Output"></textarea></td>
                 <td><button type="button" class="btn btn-danger btn-small" onclick="removeTestCase(this)">Remove Test Case</button></td>
             `;
+            // Set values through the DOM so uploaded file contents are never parsed as HTML
+            const [inputBox, outputBox] = tr.querySelectorAll("textarea");
+            inputBox.value = input_text;
+            outputBox.value = output_text;
             return tr;
         }
 
