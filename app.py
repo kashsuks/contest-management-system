@@ -8,6 +8,7 @@ import os
 import secrets
 from datetime import datetime
 import pytz
+from urllib.parse import urlparse
 from judge.judge import judge_submission
 from sqlalchemy import select
 from dotenv import load_dotenv
@@ -26,6 +27,9 @@ if not secret_key:
 app.config['SECRET_KEY'] = secret_key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# SESSION_COOKIE_SECURE is intentionally left off: the contest is served over plain HTTP on a LAN IP
 
 
 # Initialize SocketIO (default CORS policy only allows same-origin connections)
@@ -120,6 +124,13 @@ def init_admin():
             if generated:
                 print(f'Created admin user. Username: admin  Password: {password}  (shown once; set ADMIN_PASSWORD to choose your own)')
 
+@app.before_request
+def reject_cross_origin_posts():
+    # Browsers always send Origin on cross-site POSTs; refuse any that don't come from this host
+    origin = request.headers.get('Origin')
+    if request.method == 'POST' and origin and urlparse(origin).netloc != request.host:
+        return jsonify({'error': 'Cross-origin request blocked'}), 403
+
 # Routes
 @app.route('/')
 def index():
@@ -145,11 +156,11 @@ def login():
 def get_username():
     return current_user.username
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('login'))
+    return redirect(url_for('login'), code=303)
 
 @app.route('/create_user', methods=['POST'])
 @login_required
