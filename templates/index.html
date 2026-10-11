@@ -1,1390 +1,277 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coding Contest</title>
+    <title>{{ contest_name }}</title>
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='vendor/codemirror/codemirror.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='vendor/codemirror/monokai.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FFA116'/%3E%3Ctext x='16' y='21' font-family='monospace' font-size='14' font-weight='700' text-anchor='middle' fill='%231A1A1A'%3E%26lt;/%26gt;%3C/text%3E%3C/svg%3E">
     <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/dompurify/purify.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/socket.io/socket.io.js') }}"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            background-color: #f5f5f5;
-        }
-
-        nav {
-            background-color: #1976d2;
-            color: white;
-            padding: 1rem;
-            text-align: center;
-        }
-
-        nav a {
-            color: white;
-            text-decoration: none;
-            margin: 0 1rem;
-        }
-
-        .nav-tabs {
-            margin-bottom: 1rem;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-
-        .card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 1rem;
-        }
-
-        .btn {
-            display: inline-block;
-            padding: 0.5rem 1rem;
-            background: #1976d2;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            text-decoration: none;
-        }
-
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-        }
-
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .code-editor {
-            width: 100%;
-            height: 300px;
-            font-family: monospace;
-            padding: 1rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            resize: vertical;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 1rem;
-        }
-
-        th, td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-
-        th {
-            background: #f5f5f5;
-        }
-
-        .problem-list {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .CodeMirror {
-            height: 400px;
-        }
-
-        .CodeMirror-line, .CodeMirror-cursors {
-            left: 29px;
-        } 
-
-        .markdown-preview {
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 1rem;
-            margin-top: 1rem;
-            background-color: #f8f9fa;
-        }
-        .markdown-preview h1, .markdown-preview h2, .markdown-preview h3 {
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-        }
-        .markdown-preview pre, .code-view {
-            background-color: #f1f1f1;
-            padding: 1rem;
-            border-radius: 4px;
-            overflow-x: auto;
-        }
-        .markdown-preview code {
-            background-color: #f1f1f1;
-            padding: 0.2rem 0.4rem;
-            border-radius: 3px;
-        }
-        .markdown-preview table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 1rem 0;
-        }
-        .markdown-preview th, .markdown-preview td {
-            border: 1px solid #ddd;
-            padding: 0.5rem;
-        }
-        .markdown-preview th {
-            background-color: #f5f5f5;
-        }
-    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">Coding Contest</a>
-            <div class="navbar-nav ms-auto">
-                <span class="nav-item nav-link text-light" id="username"></span>
-                <form method="post" action="/logout" class="d-inline"><button type="submit" class="nav-link btn btn-link">Logout</button></form>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="#/problems">
+                <span class="brand-mark" aria-hidden="true">&lt;/&gt;</span>
+                <span id="brandName">{{ contest_name }}</span>
+            </a>
+
+            <nav class="main-nav" aria-label="Main">
+                <a href="#/problems" data-nav="problems">Problems</a>
+                <a href="#/submissions" data-nav="submissions">Submissions</a>
+                <a href="#/leaderboard" data-nav="leaderboard">Leaderboard</a>
+                <a href="#/admin" data-nav="admin" id="adminNav" hidden>Admin</a>
+            </nav>
+
+            <div class="topbar-actions">
+                <button type="button" class="icon-btn" data-theme-toggle aria-label="Toggle light/dark theme" title="Toggle theme">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+                </button>
+                <span class="user-chip"><span class="avatar" id="avatar" aria-hidden="true"></span><span class="name" id="username"></span></span>
+                <form method="post" action="/logout"><button type="submit" class="btn btn-secondary btn-sm">Log out</button></form>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <div class="container mt-4">
-        <!-- Modal -->
-        <div class="modal fade" id="popup" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content">
-                    <div class="modal-body">
-                        ...
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    </div>
+    <main id="main" class="page" tabindex="-1">
+
+        <!-- Problems list -->
+        <section data-view="problems" hidden>
+            <div class="page-head">
+                <div>
+                    <h1>Problems</h1>
+                    <p class="sub" id="problemsSummary">Loading...</p>
                 </div>
             </div>
-        </div>
-    
-        <div class="row">
-            <!-- Main Content Area -->
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <ul class="nav nav-tabs card-header-tabs" id="mainTabs">
-                            <li class="nav-item">
-                                <a class="nav-link active" data-bs-toggle="tab" href="#problems">Problems</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#problemDetails">Problem Details</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#submit">Submit</a>
-                            </li>
-                            <!-- <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#run">Run</a>
-                            </li> -->
-                            <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#viewSubmission">View Submission</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#submissions">My Submissions</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#leaderboard">Leaderboard</a>
-                            </li>
-                            <li class="nav-item admin-only" style="display: none;">
-                                <a class="nav-link" data-bs-toggle="tab" href="#admin">Admin</a>
-                            </li>
-                        </ul>
+            <div class="panel">
+                <div class="problem-list" id="problemList">
+                    <div class="problem-row"><span></span><span></span><span class="skeleton"></span><span></span><span></span><span></span></div>
+                    <div class="problem-row"><span></span><span></span><span class="skeleton"></span><span></span><span></span><span></span></div>
+                    <div class="problem-row"><span></span><span></span><span class="skeleton"></span><span></span><span></span><span></span></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Single problem: statement + editor -->
+        <section data-view="problem" hidden>
+            <a class="back-link" href="#/problems">&larr; All problems</a>
+            <div class="problem-layout">
+                <article class="panel">
+                    <div class="panel-body">
+                        <h1 id="problemTitle" style="font-size: 1.5rem; margin: 0;"></h1>
+                        <div class="statement-meta" id="problemMeta"></div>
+                        <div class="markdown" id="problemStatement"></div>
                     </div>
-                    <div class="card-body">
-                        <div class="tab-content">
-                            <!-- Problems List -->
-                            <div class="tab-pane fade show active" id="problems">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Title</th>
-                                                <th>Difficulty</th>
-                                                <th>Time Limit</th>
-                                                <th>Memory Limit</th>
-                                                <th>Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="problemList"></tbody>
-                                    </table>
-                                </div>
-                            </div>
+                </article>
 
-                            <!-- Problem Details -->
-                            <div class="tab-pane fade" id="problemDetails">
-                                <div id="problemContent"></div>
-                            </div>
-
-                            <!-- Submit Solution -->
-                            <div class="tab-pane fade" id="submit">
-                                <form id="submitForm">
-                                    <!-- Problem select -->
-                                    <div class="mb-3">
-                                        <label class="form-label">Problem</label>
-                                        <select class="form-select" id="problemSelect" required>
-                                            <option value="">Select a problem</option>
-                                        </select>
-                                    </div>
-                                    <!-- Language select -->
-                                    <div class="mb-3">
-                                        <label class="form-label">Language</label>
-                                        <select class="form-select" id="language">
-                                            <option value="python">Python</option>
-                                            <option value="cpp">C++</option>
-                                            <option value="java">Java</option>
-                                        </select>
-                                    </div>
-                                    <!-- Code -->
-                                    <div class="mb-3">
-                                        <label class="form-label">Code</label>
-                                        <textarea id="code"></textarea>
-                                    </div>
-
-                                    <div class="card-header">
-                                        <ul class="nav nav-tabs card-header-tabs" id="submitTabs">
-                                            <li class="nav-item">
-                                                <a class="nav-link active" data-bs-toggle="tab" href="#testCodeTab">Test Code</a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link" data-bs-toggle="tab" href="#submitCodeTab">Submit</a>
-                                            </li>
-                                        </ul>
-                                    </div>
-
-                                    <div class="card-body" id="submitCodeNavBar">
-                                        <!-- UI for testing code with sample test case -->
-                                        <div class="tab-pane fade show active" id="testCodeTab">
-                                            <div class="d-flex gap-2 mb-2">
-                                                <div class="flex-grow-1">
-                                                    <label class="form-label">Input</label>
-                                                    <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
-                                                </div>
-                                                <div class="flex-grow-1">
-                                                    <label class="form-label">Expected Output</label>
-                                                    <textarea class="form-control test-output" rows="3" placeholder="Enter expected output (leave this field empty to simply display the output of the program)"></textarea>
-                                                </div>
-                                            </div>
-                                            <button type="button" class="btn btn-primary" id="run-code">Run Code</button>
-                                            <div id="runResults" class="mt-4" style="display: none;">
-                                                <h5>Results</h5>
-                                                <div id="runResultsContent"></div>
-                                            </div>
-                                        </div>
-                                        <!-- Submit -->
-                                        <div class="tab-pane fade" id="submitCodeTab">
-                                            <button type="submit" class="btn btn-primary">Submit</button>
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-
-                            <!-- Run Code -->
-                            <!-- <div class="tab-pane fade" id="run">
-                                <form id="runForm">
-                                    <div class="mb-3">
-                                        <label class="form-label">Language</label>
-                                        <select class="form-select" id="runLanguage">
-                                            <option value="python">Python</option>
-                                            <option value="cpp">C++</option>
-                                            <option value="java">Java</option>
-                                        </select>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Code</label>
-                                        <textarea id="runCode"></textarea>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Test Cases</label>
-                                        <div id="runTestCases">
-                                            <div class="test-case mb-3">
-                                                <div class="d-flex gap-2 mb-2">
-                                                    <div class="flex-grow-1">
-                                                        <label class="form-label">Input</label>
-                                                        <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
-                                                    </div>
-                                                    <div class="flex-grow-1">
-                                                        <label class="form-label">Expected Output</label>
-                                                        <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
-                                                    </div>
-                                                </div>
-                                                <button type="button" class="btn btn-danger btn-sm" onclick="removeRunTestCase(this)">Remove Test Case</button>
-                                            </div>
-                                        </div>
-                                        <button type="button" class="btn btn-secondary btn-sm" onclick="addRunTestCase()">Add Test Case</button>
-                                    </div>
-                                    <button type="submit" class="btn btn-primary">Run Code</button>
-                                </form>
-                                <div id="runResults" class="mt-4" style="display: none;">
-                                    <h5>Results</h5>
-                                    <div id="runResultsContent"></div>
-                                </div>
-                            </div> -->
-
-                            <!-- View submission -->
-                            <div class="tab-pane fade" id="viewSubmission">
-                            </div>
-
-                            <!-- Submissions -->
-                            <div class="tab-pane fade" id="submissions">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>Problem</th>
-                                                <th>Language</th>
-                                                <th>Status</th>
-                                                <th>Points</th>
-                                                <th>Time</th>
-                                                <th>Memory</th>
-                                                <th>Submitted</th>
-                                                <th></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="submissionsList"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <!-- Leaderboard -->
-                            <div class="tab-pane fade" id="leaderboard">
-                                <div class="alert alert-warning" id="leaderboardFrozenAlert" style="display: none;">
-                                    <strong>Note:</strong> The leaderboard is currently frozen. The displayed standings may not reflect the most recent submissions.
-                                </div>
-                                <div class="table-responsive">
-                                    <table class="table" id="leaderboardTable">
-                                        <thead>
-                                            <tr>
-                                                <th>Rank</th>
-                                                <th>User</th>
-                                                <th>Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="leaderboardList"></tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <!-- Admin Panel -->
-                            <div class="tab-pane fade" id="admin">
-                                <div class="row">
-                                    <!-- Admin Sidebar -->
-                                    <div class="col-md-3">
-                                        <div class="list-group">
-                                            <a href="#adminUsers" class="list-group-item list-group-item-action active" data-bs-toggle="list">Users</a>
-                                            <a href="#adminProblems" class="list-group-item list-group-item-action" data-bs-toggle="list">Problems</a>
-                                            <a href="#adminSettings" class="list-group-item list-group-item-action" data-bs-toggle="list">Settings</a>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Admin Content -->
-                                    <div class="col-md-9">
-                                        <div class="tab-content">
-                                            <!-- Users Section -->
-                                            <div class="tab-pane fade show active" id="adminUsers">
-                                                <div class="card">
-                                                    <div class="card-header">
-                                                        <h5 class="mb-0">Create User</h5>
-                                                    </div>
-                                                    <div class="card-body">
-                                                        <form id="createUserForm">
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Username</label>
-                                                                <input type="text" class="form-control" id="newUsername" required>
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Email</label>
-                                                                <input type="email" class="form-control" id="newEmail" required>
-                                                            </div>
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Password</label>
-                                                                <input type="password" class="form-control" id="newPassword" required>
-                                                            </div>
-                                                            <button type="submit" class="btn btn-primary">Create User</button>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Problems Section -->
-                                            <div class="tab-pane fade" id="adminProblems">
-                                                <div class="card">
-                                                    <div class="card-header d-flex justify-content-between align-items-center">
-                                                        <h5 class="mb-0">Problems</h5>
-                                                        <button class="btn btn-primary" onclick="openProblemCreation()">Create New Problem</button>
-                                                    </div>
-                                                    <div class="card-body">
-                                                        <div class="table-responsive">
-                                                            <table class="table">
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th>ID</th>
-                                                                        <th>Title</th>
-                                                                        <th>Difficulty</th>
-                                                                        <th>Time Limit</th>
-                                                                        <th>Memory Limit</th>
-                                                                        <th>Actions</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody id="adminProblemList">
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- Settings Section -->
-                                            <div class="tab-pane fade" id="adminSettings">
-                                                <div class="card">
-                                                    <div class="card-header">
-                                                        <h5 class="mb-0">Contest Settings</h5>
-                                                    </div>
-                                                    <div class="card-body">
-                                                        <form id="contestSettingsForm">
-                                                            <div class="mb-3">
-                                                                <label class="form-label">Contest Name</label>
-                                                                <input type="text" class="form-control" id="contestName" required>
-                                                            </div>
-                                                            <div class="mb-3 form-check">
-                                                                <input type="checkbox" class="form-check-input" id="leaderboardFrozen">
-                                                                <label class="form-check-label" for="leaderboardFrozen">Freeze Leaderboard</label>
-                                                            </div>
-                                                            <div class="mb-3 form-check">
-                                                                <input type="checkbox" class="form-check-input" id="submissionStop">
-                                                                <label class="form-check-label" for="submissionStop">Stop submissions</label>
-                                                            </div>
-                                                            <button type="submit" class="btn btn-primary">Save Settings</button>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                <div>
+                    <div class="panel">
+                        <div class="editor-toolbar">
+                            <label class="visually-hidden" for="language">Language</label>
+                            <select id="language" class="form-select form-select-sm">
+                                <option value="python">Python</option>
+                                <option value="cpp">C++</option>
+                                <option value="java">Java</option>
+                            </select>
+                            <button type="button" class="btn btn-quiet btn-sm" id="resetCode" title="Replace your code with the starter template">Reset</button>
+                            <span class="spacer"></span>
+                            <button type="button" class="btn btn-secondary btn-sm" id="runBtn" title="Run with your own input (Ctrl/Cmd + Enter)">Run <span class="kbd">Ctrl&#8201;+&#8201;&crarr;</span></button>
+                            <button type="button" class="btn btn-primary btn-sm" id="submitBtn">Submit</button>
                         </div>
+                        <textarea id="code" aria-label="Code editor"></textarea>
+                        <details class="custom-input" id="customInput">
+                            <summary>Try your own input</summary>
+                            <div class="inner">
+                                <div>
+                                    <label class="form-label" for="testInput">Input</label>
+                                    <textarea id="testInput" class="form-control mono" rows="4" placeholder="What your program reads"></textarea>
+                                </div>
+                                <div>
+                                    <label class="form-label" for="testOutput">Expected output <span class="text-secondary">(optional)</span></label>
+                                    <textarea id="testOutput" class="form-control mono" rows="4" placeholder="Leave empty to just see what your program prints"></textarea>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="panel" id="resultPanel" hidden aria-live="polite">
+                        <div class="panel-body" id="resultBody"></div>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+        <!-- Submissions list -->
+        <section data-view="submissions" hidden>
+            <div class="page-head">
+                <div>
+                    <h1>My submissions</h1>
+                    <p class="sub" id="submissionsSummary"></p>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="table-scroll">
+                    <table class="data-table" id="submissionsTable">
+                        <thead>
+                            <tr>
+                                <th>Problem</th>
+                                <th>Language</th>
+                                <th>Result</th>
+                                <th class="num">Score</th>
+                                <th class="num">Time</th>
+                                <th class="num">Memory</th>
+                                <th>Submitted</th>
+                            </tr>
+                        </thead>
+                        <tbody id="submissionsList"></tbody>
+                    </table>
+                </div>
+                <div class="empty" id="submissionsEmpty" hidden>
+                    <h3>No submissions yet</h3>
+                    <p>Pick a problem and submit your first solution.</p>
+                    <a class="btn btn-primary btn-sm" href="#/problems">Browse problems</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Single submission -->
+        <section data-view="submission" hidden>
+            <a class="back-link" href="#/submissions">&larr; My submissions</a>
+            <div id="submissionDetail"></div>
+        </section>
+
+        <!-- Leaderboard -->
+        <section data-view="leaderboard" hidden>
+            <div class="page-head">
+                <div>
+                    <h1>Leaderboard</h1>
+                    <p class="sub">Updates live as people submit.</p>
+                </div>
+            </div>
+            <div class="banner" id="leaderboardFrozenAlert" hidden>
+                <span aria-hidden="true">&#10052;&#65039;</span>
+                <div><strong>The leaderboard is frozen.</strong> Standings may not include the most recent submissions.</div>
+            </div>
+            <div class="panel">
+                <div class="table-scroll">
+                    <table class="data-table" id="leaderboardTable">
+                        <thead><tr></tr></thead>
+                        <tbody id="leaderboardList"></tbody>
+                    </table>
+                </div>
+                <div class="empty" id="leaderboardEmpty" hidden>
+                    <h3>No participants yet</h3>
+                    <p>Standings will appear here once accounts have been created.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin -->
+        <section data-view="admin" hidden>
+            <div class="page-head">
+                <div>
+                    <h1>Admin</h1>
+                    <p class="sub">Manage accounts, problems and contest settings.</p>
+                </div>
+            </div>
+
+            <div class="segmented" role="tablist" aria-label="Admin sections">
+                <a href="#/admin/users" data-admin-tab="users">Users</a>
+                <a href="#/admin/problems" data-admin-tab="problems">Problems</a>
+                <a href="#/admin/settings" data-admin-tab="settings">Settings</a>
+            </div>
+
+            <div data-admin-panel="users" hidden>
+                <div class="panel" style="max-width: 560px;">
+                    <div class="panel-head">Create a contestant account</div>
+                    <div class="panel-body">
+                        <div class="form-error" id="createUserError" role="alert"></div>
+                        <form id="createUserForm" autocomplete="off">
+                            <div class="mb-3">
+                                <label class="form-label" for="newUsername">Username</label>
+                                <input type="text" class="form-control" id="newUsername" required autocapitalize="none" spellcheck="false">
+                                <div class="form-text">3-32 characters: letters, digits or underscore.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="newEmail">Email</label>
+                                <input type="email" class="form-control" id="newEmail" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="newPassword">Password</label>
+                                <input type="password" class="form-control" id="newPassword" required minlength="8" autocomplete="new-password">
+                                <div class="form-text">At least 8 characters.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="createUserButton">Create account</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div data-admin-panel="problems" hidden>
+                <div class="panel">
+                    <div class="panel-head">
+                        <span>Problems</span>
+                        <button type="button" class="btn btn-primary btn-sm" id="newProblemBtn">+ New problem</button>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>#</th><th>Title</th><th>Difficulty</th><th>Limits</th><th class="num">Points</th><th></th></tr>
+                            </thead>
+                            <tbody id="adminProblemList"></tbody>
+                        </table>
+                    </div>
+                    <div class="empty" id="adminProblemsEmpty" hidden>
+                        <h3>No problems yet</h3>
+                        <p>Create the first problem to get the contest started.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div data-admin-panel="settings" hidden>
+                <div class="panel" style="max-width: 560px;">
+                    <div class="panel-head">Contest settings</div>
+                    <div class="panel-body">
+                        <form id="contestSettingsForm">
+                            <div class="mb-3">
+                                <label class="form-label" for="contestName">Contest name</label>
+                                <input type="text" class="form-control" id="contestName" required maxlength="80">
+                            </div>
+                            <div class="switch-row">
+                                <div>
+                                    <label class="form-check-label" for="leaderboardFrozen">Freeze leaderboard</label>
+                                    <div class="hint">Hides new results from the standings until you unfreeze.</div>
+                                </div>
+                                <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="leaderboardFrozen"></div>
+                            </div>
+                            <div class="switch-row">
+                                <div>
+                                    <label class="form-check-label" for="submissionStop">Stop submissions</label>
+                                    <div class="hint">Contestants can no longer submit or run code.</div>
+                                </div>
+                                <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="submissionStop"></div>
+                            </div>
+                            <button type="submit" class="btn btn-primary mt-3" id="saveSettingsButton">Save settings</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
     <script src="{{ url_for('static', filename='vendor/codemirror/codemirror.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/codemirror/mode/python.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/codemirror/mode/clike.min.js') }}"></script>
-    <script defer>
-        // Escape any server-provided value before putting it into an HTML string
-        function escapeHtml(value) {
-            return String(value ?? '').replace(/[&<>"']/g, c => ({
-                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-            }[c]));
-        }
-
-        // Markdown -> sanitized HTML
-        function renderMarkdown(text) {
-            return DOMPurify.sanitize(marked.parse(text ?? ''));
-        }
-
-        // Initialize CodeMirror
-        const editor = CodeMirror.fromTextArea(document.getElementById('code'), {
-            mode: 'python',
-            theme: 'monokai',
-            lineNumbers: true,
-            autoCloseBrackets: true,
-            matchBrackets: true,
-            indentUnit: 4,
-            tabSize: 4,
-            lineNumberFormatter: line => line,
-            extraKeys: {
-                "Tab": cm => {
-                    if (cm.somethingSelected()) {
-                        cm.indentSelection("add");
-                    } else {
-                        cm.replaceSelection("    ", "end");
-                    }
-                }
-            }
-        });
-
-        // When clicking in CodeMirror, due to the +29px offset of the cursor, the cursor is set to the right of the clicked position
-        // This event listener tries to fix that (still kinda jank)
-        editor.getWrapperElement().addEventListener('click', event => {
-            const cursor = document.querySelector('.CodeMirror-cursors');
-            cursor.style.display = 'none';
-
-            const x = event.pageX;
-            const y = event.pageY;
-            const loc = editor.coordsChar({left: x - 29, top: y}); // subtract 29 to cancel out +29px of cursor in CSS
-            editor.getDoc().setCursor(loc);
-
-            cursor.style.display = 'block';
-        });
-
-        // Update editor mode when language changes
-        document.getElementById('language').addEventListener('change', e => {
-            const mode = e.target.value === 'python' ? 'python' : 'text/x-c++src';
-            editor.setOption('mode', mode);
-        });
-
-        // Show a notification
-        function showNotification(text) {
-            // Delete previously shown notifications
-            document.querySelectorAll('.notif').forEach(e => {
-                e.remove();
-            });
-
-            // Create new notification
-            const notification = document.createElement('div');
-            notification.className = 'notif alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
-            notification.style.zIndex = '1000';
-            notification.append(String(text));
-            notification.insertAdjacentHTML('beforeend', '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>');
-            document.body.appendChild(notification);
-
-            // Remove notification after 5 seconds
-            setTimeout(() => {
-                notification.remove();
-            }, 5000);
-
-            return notification;
-        }
-
-        // Initialize Socket.IO
-        const socket = io();
-
-        // Listen for events to update leaderboard (e.g. someone made a submission)
-        socket.on('update_leaderboard', async txt => {
-            try {
-                await loadLeaderboard();
-                if (txt) {
-                    showNotification(txt);
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        });
-
-        // Listen for new problem events
-        socket.on('new_problem', problem => {
-            console.log('New problem received:', problem);
-            
-            // Update problem list
-            const problemList = document.getElementById('problemList');
-            const rows = Array.from(problemList.getElementsByTagName('tr'));
-            
-            // Create new row
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-                <td>${escapeHtml(problem.id)}</td>
-                <td>${escapeHtml(problem.title)}</td>
-                <td>${escapeHtml(problem.difficulty)}</td>
-                <td>${escapeHtml(problem.time_limit)}ms</td>
-                <td>${escapeHtml(problem.memory_limit)}MB</td>
-                <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${Number(problem.id)})">View Problem</button></td>
-            `;
-
-            // Find the correct position to insert the new row
-            let inserted = false;
-            for (let i = 0; i < rows.length; i++) {
-                const currentId = parseInt(rows[i].cells[0].textContent);
-                if (problem.id < currentId) {
-                    problemList.insertBefore(newRow, rows[i]);
-                    inserted = true;
-                    break;
-                }
-            }
-            
-            // If not inserted (should be at the end), append it
-            if (!inserted) {
-                problemList.appendChild(newRow);
-            }
-
-            // Update problem select dropdown
-            const problemSelect = document.getElementById('problemSelect');
-            const options = Array.from(problemSelect.options);
-            
-            // Create new option
-            const newOption = document.createElement('option');
-            newOption.value = problem.id;
-            newOption.textContent = `${problem.title} (${problem.difficulty})`;
-
-            // Find the correct position to insert the new option
-            inserted = false;
-            for (let i = 1; i < options.length; i++) { // Start from 1 to skip the "Select a problem" option
-                const currentId = parseInt(options[i].value);
-                if (problem.id < currentId) {
-                    problemSelect.insertBefore(newOption, options[i]);
-                    inserted = true;
-                    break;
-                }
-            }
-            
-            // If not inserted (should be at the end), append it
-            if (!inserted) {
-                problemSelect.appendChild(newOption);
-            }
-
-            // Show a notification
-            showNotification(`New problem added: ${problem.title}`);
-        });
-
-        // Displays a popup box with a message
-        function alertPopup(text, mode = 'neutral') {
-            let modeSpan = '';
-            if (mode == 'success') {
-                modeSpan = `<span style="color: green; font-weight: bold;">Success</span>: `
-            } else if (mode == 'error') {
-                modeSpan = `<span style="color: red; font-weight: bold;">Error</span>: `
-            }
-
-            const popup = document.getElementById('popup');
-            popup.querySelector('.modal-body').innerHTML = `${modeSpan}${escapeHtml(text)}`;
-            const modal = new bootstrap.Modal(popup);
-            modal.show();
-        }
-
-        // Load problems
-        async function loadProblems() {
-            console.log('Loading problems...');
-            try {
-                const response = await fetch('/problems');
-                const problems = await response.json();
-                console.log('Problems loaded:', problems);
-                
-                // Update problem list
-                const problemList = document.getElementById('problemList');
-                problemList.innerHTML = problems.sort((a, b) => a.id - b.id).map(p => `
-                    <tr>
-                        <td>${escapeHtml(p.id)}</td>
-                        <td>${escapeHtml(p.title)}</td>
-                        <td>${escapeHtml(p.difficulty)}</td>
-                        <td>${escapeHtml(p.time_limit)}ms</td>
-                        <td>${escapeHtml(p.memory_limit)}MB</td>
-                        <td><button class="btn btn-primary btn-sm" onclick="loadProblem(${Number(p.id)})">View Problem</button></td>
-                    </tr>
-                `).join('');
-
-                // Update problem select dropdown
-                const problemSelect = document.getElementById('problemSelect');
-                problemSelect.innerHTML = `
-                    <option value="">Select a problem</option>
-                    ${problems.map(p => `
-                        <option value="${escapeHtml(p.id)}">${escapeHtml(p.title)} (${escapeHtml(p.difficulty)})</option>
-                    `).join('')}
-                `;
-            } catch (error) {
-                console.error('Error loading problems:', error);
-            }
-        }
-
-        // Load problem details
-        async function loadProblem(id) {
-            try {
-                const response = await fetch(`/problem/${id}`);
-                const problem = await response.json();
-                
-                // Create problem details content
-                const problemContent = document.getElementById('problemContent');
-                problemContent.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3>${escapeHtml(problem.title)}</h3>
-                        <button class="btn btn-secondary" onclick="showProblemsList()">Back to Problems</button>
-                    </div>
-                    <div class="mb-3">
-                        <span class="badge bg-${problem.difficulty === 'Easy' ? 'success' : problem.difficulty === 'Medium' ? 'warning' : 'danger'}">${escapeHtml(problem.difficulty)}</span>
-                        <span class="ms-2">Time Limit: ${escapeHtml(problem.time_limit)}ms</span>
-                        <span class="ms-2">Memory Limit: ${escapeHtml(problem.memory_limit)}MB</span>
-                    </div>
-                    <div class="problem-description markdown-preview">${renderMarkdown(problem.description)}</div>
-                    <br>
-                `;
-
-                const btn = document.createElement('button');
-                btn.textContent = 'Submit Solution';
-                btn.className = 'btn btn-primary btn-sm';
-                btn.addEventListener('click', () => {
-                    const submit = document.querySelector("a[href='#submit']");
-                    if (submit) {
-                        const tab = new bootstrap.Tab(submit);
-                        tab.show();
-                    }
-
-                    const select = document.getElementById("problemSelect");
-                    select.value = `${id}`;
-                });
-                problemContent.appendChild(btn);
-                
-                // Store the problem ID for submission
-                document.getElementById('problemSelect').value = id;
-                
-                // Switch to problem details tab
-                const problemDetailsTab = document.querySelector('a[href="#problemDetails"]');
-                if (problemDetailsTab) {
-                    const tab = new bootstrap.Tab(problemDetailsTab);
-                    tab.show();
-                }
-            } catch (error) {
-                console.error('Error loading problem:', error);
-                alertPopup('Failed to load problem details. Please try again.', 'error');
-            }
-        }
-
-        // Show problems list
-        function showProblemsList() {
-            const problemsTab = document.querySelector('a[href="#problems"]');
-            if (problemsTab) {
-                const tab = new bootstrap.Tab(problemsTab);
-                tab.show();
-            }
-        }
-
-        // Load submissions
-        async function loadSubmissions() {
-            const response = await fetch('/submissions');
-            const submissions = await response.json();
-            document.getElementById('submissionsList').innerHTML = submissions.sort((a, b) => b.id - a.id).map(s => `
-                <tr>
-                    <td>${escapeHtml(s.problem.title)}</td>
-                    <td>${escapeHtml(s.language)}</td>
-                    <td><span class="badge bg-${s.status === 'AC' ? 'success' : 'danger'}">${escapeHtml(s.status)}</span></td>
-                    <td>${escapeHtml(s.points_earned)}/${escapeHtml(s.problem.total_points)}</td>
-                    <td>${s.execution_time ? s.execution_time.toFixed(2) + 'ms' : '-'}</td>
-                    <td>${s.memory_used ? s.memory_used.toFixed(2) + 'KB' : '-'}</td>
-                    <td>${new Date(s.submitted_at).toLocaleString()}</td>
-                    <td><button class="btn btn-primary btn-sm" onclick="viewSubmission(${Number(s.id)})">View</button></td>
-                </tr>
-            `).join('');
-        }
-
-        // Load submission into view tab
-        async function viewSubmission(submission_id) {
-            const response = await fetch(`/submission/${submission_id}`);
-            const submission = await response.json();
-            const viewer = document.getElementById('viewSubmission');
-
-            viewer.innerHTML = `
-                <span><b>Submitted on</b>: ${new Date(submission.submitted_at).toLocaleString()}</span> <br>
-                <span><b>Submission for problem</b>: ${escapeHtml(submission.problem.title)}</span> <br>
-                <span><b>Points earned</b>: ${escapeHtml(submission.points_earned)}/${escapeHtml(submission.problem.total_points)}</span> <br><br>
-            `;
-
-            let batch_num = 1;
-            let testcase_num = 1;
-            for (const batch of submission.batch_results) {
-                const status = batch.status;
-                const div = document.createElement('div');
-                div.className = 'mb-3';
-                
-                // Check if batch has more than 10 test cases
-                const hasManyTestCases = batch.test_case_results.length > 10;
-                
-                let innerHTML = `
-                    <span style="font-size: .83em; font-weight: bold;">Batch ${batch_num}:</span>
-                    <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${escapeHtml(status)}</span>
-                `;
-
-                if (hasManyTestCases) {
-                    // For batches with many test cases, just show the overall status
-                    innerHTML += `
-                        <br>
-                        <span style="margin-left: 2ch; color: #666;">
-                            ${batch.test_case_results.length} test cases - 
-                            ${batch.test_case_results.filter(tc => tc.status === 'AC').length} passed
-                        </span>
-                    `;
-                } else {
-                    // For batches with 10 or fewer test cases, show individual results
-                    innerHTML += '<br>';
-                    for (const test_case of batch.test_case_results) {
-                        const status = test_case.status;
-                        const indent = '<span style="display: inline-block; width: 2ch;">&#9;</span>';
-                        innerHTML += `
-                            ${indent}<span>Input ${testcase_num}: <span class="badge bg-${status === 'AC' ? 'success' : 'danger'}">${escapeHtml(status)}</span></span>
-                        `;
-                        if (status != 'skip') {
-                            innerHTML += `
-                                ${indent}<span>[Execution time: ${escapeHtml(test_case.execution_time)}ms, Memory: ${escapeHtml(test_case.memory_used)}KB]</span>
-                            `;
-                        }
-                        innerHTML += '<br>';
-                        testcase_num++;
-                    }
-                }
-
-                div.innerHTML = innerHTML;
-                viewer.appendChild(div);
-                batch_num++;
-            }
-
-            const codeView = document.createElement('div');
-            codeView.className = 'code-view';
-            codeView.innerHTML = `<code>${escapeHtml(submission.code)}</code>`;
-            viewer.appendChild(document.createElement('br'));
-            viewer.appendChild(codeView);
-
-            const viewProblem = document.querySelector('a[href="#viewSubmission"]');
-            if (viewProblem) {
-                const tab = new bootstrap.Tab(viewProblem);
-                tab.show();
-            }
-        }
-
-        // Load leaderboard
-        async function loadLeaderboard() {
-            try {
-                const response = await fetch('/leaderboard');
-                const data = await response.json();
-                
-                const leaderboardTable = document.getElementById('leaderboardTable');
-                const leaderboardList = document.getElementById('leaderboardList');
-                const frozenAlert = document.getElementById('leaderboardFrozenAlert');
-                
-                // Show/hide frozen alert
-                frozenAlert.style.display = data.is_frozen ? 'block' : 'none';
-                
-                // Update header row with problem shortnames
-                const headerRow = leaderboardTable.querySelector('thead tr');
-                headerRow.innerHTML = `
-                    <th>Rank</th>
-                    <th>User</th>
-                    ${data.problems.map(p => `<th>${escapeHtml(p.shortname)}</th>`).join('')}
-                    <th>Total</th>
-                `;
-                
-                // Track first solves for each problem
-                const firstSolves = {};
-                data.users.forEach(user => {
-                    user.problem_points.forEach((points, index) => {
-                        if (points.points > 0 && !firstSolves[index]) {
-                            firstSolves[index] = user.username;
-                        }
-                    });
-                });
-                
-                // Update body rows
-                leaderboardList.innerHTML = data.users.map((user, index) => `
-                    <tr>
-                        <td>${index + 1}</td>
-                        <td>${escapeHtml(user.username)}</td>
-                        ${user.problem_points.map((p, i) => `
-                            <td class="${firstSolves[i] === user.username ? 'bg-success bg-opacity-25' : ''}">
-                                ${p.points > 0 ? `
-                                    ${escapeHtml(p.points)}<br>
-                                    <small class="text-muted">${escapeHtml(p.submission_time || '')}</small>
-                                ` : '-'}
-                            </td>
-                        `).join('')}
-                        <td><strong>${escapeHtml(user.total_points)}</strong></td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                console.error('Error loading leaderboard:', error);
-            }
-        }
-
-        // Load contest settings
-        async function loadContestSettings() {
-            try {
-                const response = await fetch('/contest_settings');
-                const settings = await response.json();
-                document.getElementById('contestName').value = settings.contest_name;
-                document.getElementById('leaderboardFrozen').checked = settings.leaderboard_frozen || false;
-                
-                // Update contest name in navbar
-                document.querySelector('.navbar-brand').textContent = settings.contest_name || 'Coding Contest';
-            } catch (error) {
-                console.error('Error loading contest settings:', error);
-            }
-        }
-
-        // Save contest settings
-        document.getElementById('contestSettingsForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const contestName = document.getElementById('contestName').value;
-            const leaderboardFrozen = document.getElementById('leaderboardFrozen').checked;
-            const submissionStopped = document.getElementById('submissionStop').checked;
-
-            try {
-                const response = await fetch('/update_contest_settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        contest_name: contestName,
-                        leaderboard_frozen: leaderboardFrozen,
-                        submissions_stopped: submissionStopped
-                    })
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    alertPopup('Settings updated successfully', 'success');
-                    // Update contest name in navbar
-                    document.querySelector('.navbar-brand').textContent = contestName;
-                    // Update leaderboard if needed
-                    loadLeaderboard();
-                } else {
-                    alertPopup(result.error, 'error');
-                }
-            } catch (error) {
-                console.error(error);
-                alertPopup('An error occurred. Please try again.', 'error');
-            }
-        });
-
-        // Submit solution
-        document.getElementById('submitForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const code = editor.getValue('<br>');
-            const language = document.getElementById('language').value;
-            const problemId = document.getElementById('problemSelect').value;
-
-            if (!problemId) {
-                alertPopup('Please select a problem first', 'error');
-                return;
-            }
-
-            try {
-                console.log('Submitting solution:', {
-                    problem_id: parseInt(problemId),
-                    language,
-                    code_length: code.length
-                });
-
-                const response = await fetch('/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        problem_id: parseInt(problemId), 
-                        code, 
-                        language 
-                    })
-                });
-
-                console.log('Response status:', response.status);
-                const responseText = await response.text();
-                console.log('Raw response:', responseText);
-
-                let result;
-                try {
-                    result = JSON.parse(responseText);
-                } catch (parseError) {
-                    console.error('Failed to parse response:', parseError);
-                    alertPopup('Server returned invalid response. Please try again.', 'error');
-                    return;
-                }
-
-                if (response.ok) {
-                    // Refresh all data
-                    await Promise.all([
-                        loadSubmissions(),
-                        loadLeaderboard(),
-                        loadProblems(),
-                        viewSubmission(result.id)
-                    ]);
-                } else {
-                    alertPopup(result.error || 'Submission failed', 'error');
-                }
-            } catch (error) {
-                console.error('Submission error:', error);
-                alertPopup('An error occurred. Please try again.', 'error');
-            }
-        });
-
-        // Create user (admin only)
-        document.getElementById('createUserForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('newUsername').value;
-            const email = document.getElementById('newEmail').value;
-            const password = document.getElementById('newPassword').value;
-
-            try {
-                const response = await fetch('/create_user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email, password })
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    alertPopup('User created successfully', 'success');
-                    e.target.reset();
-                } else {
-                    alertPopup(result.error, 'error');
-                }
-            } catch (error) {
-                alertPopup('An error occurred. Please try again.', 'error');
-            }
-        });
-
-        // Function to load admin problems
-        async function loadAdminProblems() {
-            try {
-                const response = await fetch('/problems');
-                const problems = await response.json();
-                
-                const adminProblemList = document.getElementById('adminProblemList');
-                adminProblemList.innerHTML = problems.sort((a, b) => a.id - b.id).map(p => `
-                    <tr>
-                        <td>${escapeHtml(p.id)}</td>
-                        <td>${escapeHtml(p.title)}</td>
-                        <td>${escapeHtml(p.difficulty)}</td>
-                        <td>${escapeHtml(p.time_limit)}ms</td>
-                        <td>${escapeHtml(p.memory_limit)}MB</td>
-                        <td>
-                            <button class="btn btn-primary btn-sm" onclick="loadProblem(${Number(p.id)})">View</button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (error) {
-                console.error('Error loading admin problems:', error);
-            }
-        }
-
-        // Update the openProblemCreation function to refresh admin problems after creation
-        function openProblemCreation() {
-            const newWindow = window.open('/problem_creation.html', '_blank');
-            newWindow.addEventListener('visibilitychange', event => {
-                if (newWindow.closed) {
-                    loadAdminProblems();
-                }
-            });
-        }
-
-        // Check if user is admin
-        async function checkAdmin() {
-            try {
-                console.log('Checking admin status...');
-                const response = await fetch('/check_admin');
-                if (!response.ok) {
-                    console.error('Admin check failed:', response.status);
-                    return;
-                }
-                
-                const data = await response.json();
-                console.log('Admin check response:', data);
-                
-                const adminElements = document.querySelectorAll('.admin-only');
-                if (data.is_admin) {
-                    console.log('User is admin, showing admin tab');
-                    adminElements.forEach(el => {
-                        el.style.display = 'block';
-                    });
-                } else {
-                    console.log('User is not admin');
-                    adminElements.forEach(el => {
-                        el.style.display = 'none';
-                    });
-                }
-            } catch (error) {
-                console.error('Error checking admin status:', error);
-            }
-        }
-
-        // Set username
-        async function setUsername() {
-            try {
-                const response = await fetch('/username');
-                const name = await response.text();
-                document.getElementById('username').textContent = name;
-            } catch (error) {
-                console.error('Error loading username:', error);
-            }
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('Page loaded, initializing...');
-            setUsername();
-            loadProblems();
-            loadSubmissions();
-            loadLeaderboard();
-            checkAdmin();
-            loadAdminProblems();
-            loadContestSettings();
-        });
-
-        // Add event listeners so that whenever a nav link in the submit tab is clicked, only the corresponding tab is shown
-        // (everything else is hidden so that it takes up no space in the page)
-        document.getElementById('submitTabs').querySelectorAll('.nav-link').forEach(currentElem => {
-            currentElem.addEventListener('click', () => {
-                const idOfCurrentLink = currentElem.href.split('#').pop();
-                document.getElementById('submitCodeNavBar').querySelectorAll('.tab-pane').forEach(elem => {
-                    if (elem.id == idOfCurrentLink) {
-                        elem.style.display = "block";
-                    }
-                    else {
-                        elem.style.display = "none";
-                    }
-                });
-            });
-        });
-
-        // // Run code functionality
-        // function addRunTestCase() {
-        //     const container = document.getElementById('runTestCases');
-        //     const testCase = document.createElement('div');
-        //     testCase.className = 'test-case mb-3';
-        //     testCase.innerHTML = `
-        //         <div class="d-flex gap-2 mb-2">
-        //             <div class="flex-grow-1">
-        //                 <label class="form-label">Input</label>
-        //                 <textarea class="form-control test-input" rows="3" placeholder="Enter test input"></textarea>
-        //             </div>
-        //             <div class="flex-grow-1">
-        //                 <label class="form-label">Expected Output</label>
-        //                 <textarea class="form-control test-output" rows="3" placeholder="Enter expected output"></textarea>
-        //             </div>
-        //         </div>
-        //         <button type="button" class="btn btn-danger btn-sm" onclick="removeRunTestCase(this)">Remove Test Case</button>
-        //     `;
-        //     container.appendChild(testCase);
-        // }
-
-        // function removeRunTestCase(button) {
-        //     const container = document.getElementById('runTestCases');
-        //     if (container.children.length > 1) {
-        //         button.closest('.test-case').remove();
-        //     } else {
-        //         alert("Cannot remove the last test case");
-        //     }
-        // }
-
-        // // Initialize CodeMirror for run code
-        // const runCodeEditor = CodeMirror.fromTextArea(document.getElementById('runCode'), {
-        //     mode: 'text/x-c++src',
-        //     theme: 'monokai',
-        //     lineNumbers: true,
-        //     indentUnit: 4,
-        //     tabSize: 4,
-        //     indentWithTabs: false,
-        //     lineWrapping: true,
-        //     matchBrackets: true,
-        //     autoCloseBrackets: true,
-        //     extraKeys: {"Tab": "indentMore", "Shift-Tab": "indentLess"}
-        // });
-
-        // Handle run code form submission
-        document.getElementById('run-code').addEventListener('click', async function (e) {
-            e.preventDefault();
-
-            const language = document.getElementById('language').value;
-            const code = editor.getValue();
-
-            // Get input and output
-            const parentForm = this.closest('form');
-            const input = parentForm.querySelector('.test-input').value.trim();
-            const output = parentForm.querySelector('.test-output').value.trim();
-
-            // If output is empty, just print output of program
-            const justPrintOutput = !output;
-
-            if (!input) {
-                alertPopup('Please enter test case input', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch('/run_code', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        code, 
-                        language,
-                        test_cases: [{ input, output }]
-                    })
-                });
-
-                const result = await response.json();
-                
-                // Display results
-                const resultsDiv = document.getElementById('runResults');
-                const resultsContent = document.getElementById('runResultsContent');
-                resultsDiv.style.display = 'block';
-                
-                let html = '';
-                if (response.ok) {
-                    const batch = result.batch_results[0];  // We only have one batch for running
-                    const tc = batch.test_case_results[0];
-                    if (justPrintOutput) {
-                        html = `
-                            <div class="test-case-result mb-3">
-                                <div class="mt-2">
-                                    <strong>Your Output:</strong><br>
-                                    <pre class="bg-light p-2">${escapeHtml(tc.got)}</pre>
-                                </div>
-                            </div>
-                        `;
-                    }
-                    else {
-                        html = `
-                            <div class="alert alert-${result.status === 'AC' ? 'success' : 'danger'}">
-                                <strong>Status:</strong> ${escapeHtml(result.status)}
-                                ${result.status === 'AC' ? 
-                                    `<br><strong>Execution Time:</strong> ${escapeHtml(result.execution_time)}ms
-                                    <br><strong>Memory Used:</strong> ${escapeHtml(result.memory_used)}KB` : 
-                                    ''
-                                }
-                            </div>
-                            <div class="test-results">
-                                <h6>Test Case Result:</h6>
-                                <div class="test-case-result mb-3">
-                                    <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${escapeHtml(tc.status)}</span>
-                                    ${tc.status !== 'AC' ? `
-                                        <div class="mt-2">
-                                            <strong>Expected Output:</strong><br>
-                                            <pre class="bg-light p-2">${escapeHtml(tc.expected)}</pre>
-                                            <strong>Your Output:</strong><br>
-                                            <pre class="bg-light p-2">${escapeHtml(tc.got)}</pre>
-                                            ${tc.error ? `<br><strong>Error:</strong> ${escapeHtml(tc.error)}` : ''}
-                                        </div>
-                                    ` : ''}
-                                    ${tc.execution_time ? `<br>Time: ${escapeHtml(tc.execution_time)}ms` : ''}
-                                    ${tc.memory_used ? `<br>Memory: ${escapeHtml(tc.memory_used)}KB` : ''}
-                                </div>
-                            </div>
-                        `;
-                    }
-                } else {
-                    html = `<div class="alert alert-danger">Error: ${escapeHtml(result.error || 'Unknown error')}</div>`;
-                }
-                
-                resultsContent.innerHTML = html;
-            } catch (error) {
-                console.error(error);
-                alertPopup('An error occurred while running the code. Please try again.', 'error');
-            }
-        });
-
-        // // Handle run code form submission
-        // document.getElementById('run-code').addEventListener('click', async (e) => {
-        //     e.preventDefault();
-            
-        //     const language = document.getElementById('runLanguage').value;
-        //     const code = runCodeEditor.getValue();
-            
-        //     // Collect test cases
-        //     const testCases = [];
-        //     document.querySelectorAll('#runTestCases .test-case').forEach(tc => {
-        //         const input = tc.querySelector('.test-input').value.trim();
-        //         const output = tc.querySelector('.test-output').value.trim();
-        //         if (input || output) {  // Only add if either input or output is provided
-        //             testCases.push({ input, output });
-        //         }
-        //     });
-            
-        //     if (testCases.length === 0) {
-        //         alert('Please add at least one test case');
-        //         return;
-        //     }
-            
-        //     try {
-        //         const response = await fetch('/run_code', {
-        //             method: 'POST',
-        //             headers: { 'Content-Type': 'application/json' },
-        //             body: JSON.stringify({ 
-        //                 code, 
-        //                 language,
-        //                 test_cases: testCases
-        //             })
-        //         });
-
-        //         const result = await response.json();
-                
-        //         // Display results
-        //         const resultsDiv = document.getElementById('runResults');
-        //         const resultsContent = document.getElementById('runResultsContent');
-        //         resultsDiv.style.display = 'block';
-                
-        //         let html = '';
-        //         if (response.ok) {
-        //             const batch = result.batch_results[0];  // We only have one batch for running
-        //             html = `
-        //                 <div class="alert alert-${result.status === 'AC' ? 'success' : 'danger'}">
-        //                     <strong>Status:</strong> ${result.status}
-        //                     ${result.status === 'AC' ? 
-        //                         `<br><strong>Execution Time:</strong> ${result.execution_time}ms
-        //                          <br><strong>Memory Used:</strong> ${result.memory_used}KB` : 
-        //                         ''
-        //                     }
-        //                 </div>
-        //                 <div class="test-results">
-        //                     <h6>Test Case Results:</h6>
-        //             `;
-                    
-        //             batch.test_case_results.forEach((tc, i) => {
-        //                 html += `
-        //                     <div class="test-case-result mb-3">
-        //                         <strong>Test Case ${i + 1}:</strong>
-        //                         <span class="badge bg-${tc.status === 'AC' ? 'success' : 'danger'}">${tc.status}</span>
-        //                         ${tc.status !== 'AC' ? `
-        //                             <div class="mt-2">
-        //                                 <strong>Expected Output:</strong><br>
-        //                                 <pre class="bg-light p-2">${escapeHtml(tc.expected)}</pre>
-        //                                 <strong>Your Output:</strong><br>
-        //                                 <pre class="bg-light p-2">${escapeHtml(tc.got)}</pre>
-        //                                 ${tc.error ? `<br><strong>Error:</strong> ${escapeHtml(tc.error)}` : ''}
-        //                             </div>
-        //                         ` : ''}
-        //                         ${tc.execution_time ? `<br>Time: ${tc.execution_time}ms` : ''}
-        //                         ${tc.memory_used ? `<br>Memory: ${tc.memory_used}KB` : ''}
-        //                     </div>
-        //                 `;
-        //             });
-                    
-        //             html += '</div>';
-        //         } else {
-        //             html = `<div class="alert alert-danger">Error: ${result.error || 'Unknown error'}</div>`;
-        //         }
-                
-        //         resultsContent.innerHTML = html;
-                
-        //     } catch (error) {
-        //         console.error('Run error:', error);
-        //         alert('An error occurred while running the code. Please try again.');
-        //     }
-        // });
-
-        // // Update CodeMirror mode when language changes
-        // document.getElementById('runLanguage').addEventListener('change', function() {
-        //     const mode = {
-        //         'python': 'text/x-python',
-        //         'cpp': 'text/x-c++src',
-        //         'java': 'text/x-java'
-        //     }[this.value];
-        //     runCodeEditor.setOption('mode', mode);
-        // });
-    </script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
