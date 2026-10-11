@@ -192,7 +192,7 @@ def shortname_for(index):
 def index():
     if not current_user.is_authenticated:
         return redirect(url_for('login'))
-    return render_template('index.html')
+    return render_template('index.html', contest_name=contest_config.get('contest_name', 'Coding Contest'))
 
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute', methods=['POST'], key_func=get_remote_address)
@@ -209,7 +209,7 @@ def login():
         
         return jsonify({'error': 'Invalid username or password'}), 401
     
-    return render_template('login.html')
+    return render_template('login.html', contest_name=contest_config.get('contest_name', 'Coding Contest'))
 
 @app.route('/username')
 @login_required
@@ -325,7 +325,8 @@ def get_problems():
         'shortname': p.shortname,
         'difficulty': p.difficulty,
         'time_limit': p.time_limit,
-        'memory_limit': p.memory_limit
+        'memory_limit': p.memory_limit,
+        'total_points': sum(batch['points'] for batch in p.batches)
     } for p in problems])
 
 @app.route('/problem/<int:problem_id>')
@@ -339,7 +340,8 @@ def get_problem(problem_id):
         'description': problem.description,
         'difficulty': problem.difficulty,
         'time_limit': problem.time_limit,
-        'memory_limit': problem.memory_limit
+        'memory_limit': problem.memory_limit,
+        'total_points': sum(batch['points'] for batch in problem.batches)
     }
     # Test cases are hidden from contestants
     if current_user.is_admin:
@@ -387,7 +389,7 @@ def submit():
         # Judge the submission
         try:
             result = judge_submission(
-                code=data['code'].replace("<br>", "\n"),
+                code=data['code'],
                 language=data['language'],
                 batches=problem.batches,
                 time_limit=problem.time_limit,
@@ -464,7 +466,7 @@ def run_code():
         # Run the code
         try:
             result = judge_submission(
-                code=data['code'].replace("<br>", "\n"),
+                code=data['code'],
                 language=data['language'],
                 batches=[batch],
                 time_limit=time_limit,
@@ -549,6 +551,8 @@ def get_submission(submission_id):
         'id': submission.id,
         'user_id': submission.user_id,
         'problem_id': submission.problem_id,
+        'language': submission.language,
+        'status': submission.status,
         'batch_results': submission.batch_results,
         'submitted_at': submission.submitted_at.isoformat(),
         'points_earned': submission.points_earned,
@@ -565,6 +569,7 @@ def get_submissions():
     submissions = Submission.query.filter_by(user_id=current_user.id).order_by(Submission.id).all()
     return jsonify([{
         'id': s.id,
+        'problem_id': s.problem_id,
         'problem': {
             'title': s.problem.title,
             'total_points': sum(batch['points'] for batch in s.problem.batches)
