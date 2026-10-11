@@ -1,79 +1,94 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Coding Contest</title>
+    <title>Sign in - {{ contest_name }}</title>
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8f9fa;
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .login-container {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 400px;
-        }
-        .error-message {
-            color: red;
-            margin-top: 1rem;
-            display: none;
-        }
-    </style>
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FFA116'/%3E%3Ctext x='16' y='21' font-family='monospace' font-size='14' font-weight='700' text-anchor='middle' fill='%231A1A1A'%3E%26lt;/%26gt;%3C/text%3E%3C/svg%3E">
 </head>
 <body>
-    <div class="login-container">
-        <h2 class="text-center mb-4">Coding Contest</h2>
-        <form id="loginForm">
-            <div class="mb-3">
-                <label for="username" class="form-label">Username</label>
-                <input type="text" class="form-control" id="username" required>
-            </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" required>
-            </div>
-            <button type="submit" class="btn btn-primary w-100">Login</button>
-        </form>
-        <div id="errorMessage" class="error-message text-center"></div>
+    <div class="auth-wrap">
+        <button type="button" class="icon-btn auth-theme" data-theme-toggle aria-label="Toggle light/dark theme" title="Toggle theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+
+        <main class="auth-card">
+            <div class="brand-mark" aria-hidden="true">&lt;/&gt;</div>
+            <h1>{{ contest_name }}</h1>
+            <p class="text-secondary mb-4">Sign in with the account your organiser gave you.</p>
+
+            <div id="errorMessage" class="form-error" role="alert"></div>
+
+            <form id="loginForm" novalidate>
+                <div class="mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" class="form-control" id="username" name="username" autocomplete="username"
+                           autocapitalize="none" spellcheck="false" required autofocus>
+                </div>
+                <div class="mb-4">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100" id="loginButton">Sign in</button>
+            </form>
+        </main>
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        const form = document.getElementById('loginForm');
+        const button = document.getElementById('loginButton');
+        const errorBox = document.getElementById('errorMessage');
+
+        function showError(message) {
+            errorBox.textContent = message;
+            errorBox.classList.add('show');
+        }
+
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('username').value;
+            errorBox.classList.remove('show');
+
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
-            const errorMessage = document.getElementById('errorMessage');
+            if (!username || !password) {
+                showError('Please enter your username and password.');
+                return;
+            }
+
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner" aria-hidden="true"></span> Signing in...';
 
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
-                const data = await response.json();
-
                 if (response.ok) {
                     window.location.href = '/';
+                    return;
+                }
+
+                if (response.status === 429) {
+                    showError('Too many attempts. Please wait a minute and try again.');
+                } else if (response.status === 401) {
+                    showError('That username or password is not right.');
+                    document.getElementById('password').select();
                 } else {
-                    errorMessage.textContent = data.error;
-                    errorMessage.style.display = 'block';
+                    showError('Something went wrong. Please try again.');
                 }
             } catch (error) {
-                errorMessage.textContent = 'An error occurred. Please try again.';
-                errorMessage.style.display = 'block';
+                showError('Could not reach the server. Check your connection and try again.');
             }
+
+            button.disabled = false;
+            button.textContent = 'Sign in';
         });
     </script>
 </body>
-</html> 
+</html>
