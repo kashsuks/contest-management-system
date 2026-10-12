@@ -53,7 +53,7 @@ def _check_judge_uncached() -> Dict[str, Any]:
     try:
         result = judge_submission('print(1)', 'python', [{'points': 1, 'test_cases': [{'input': '', 'output': '1'}]}], 5000, 64)
     except JudgeError as e:
-        return {'ok': False, 'sandbox': 'docker', 'message': f'The sandbox test run failed: {e}'}
+        return {'ok': False, 'sandbox': 'docker', 'message': str(e)}
     if result['batch_results'][0]['status'] != 'AC':
         return {'ok': False, 'sandbox': 'docker', 'message': 'The sandbox test run did not produce the expected output.'}
     return {'ok': True, 'sandbox': 'docker', 'message': 'The judge is working.'}
