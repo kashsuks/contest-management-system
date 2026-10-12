@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from typing import Dict, Any, List
 
@@ -23,6 +24,52 @@ _warned_local = False
 
 class JudgeError(Exception):
     """The judge itself (not the submission) failed, e.g. Docker is unavailable."""
+
+
+HEALTH_CACHE_SECONDS = 20
+_health_cache = {'at': 0.0, 'result': None}
+
+
+def _check_judge_uncached() -> Dict[str, Any]:
+    if SANDBOX == 'local':
+        return {'ok': True, 'warning': True, 'sandbox': 'local',
+                'message': 'Running in local development mode: submissions are NOT sandboxed.'}
+    if SANDBOX != 'docker':
+        return {'ok': False, 'sandbox': SANDBOX, 'message': f"Unknown JUDGE_SANDBOX '{SANDBOX}' (expected 'docker' or 'local')."}
+
+    try:
+        daemon = subprocess.run(['docker', 'version', '--format', '{{.Server.Version}}'],
+                                capture_output=True, text=True, timeout=15)
+    except FileNotFoundError:
+        return {'ok': False, 'sandbox': 'docker', 'message': 'Docker is not installed on the server.'}
+    except subprocess.TimeoutExpired:
+        return {'ok': False, 'sandbox': 'docker', 'message': 'Docker is not responding.'}
+    if daemon.returncode != 0:
+        return {'ok': False, 'sandbox': 'docker', 'message': 'Docker is installed but not running. Start Docker on the server.'}
+
+    image = subprocess.run(['docker', 'image', 'inspect', DOCKER_IMAGE], capture_output=True, text=True, timeout=15)
+    if image.returncode != 0:
+        return {'ok': False, 'sandbox': 'docker',
+                'message': f"The judge image '{DOCKER_IMAGE}' is missing. Build it with: docker build -t {DOCKER_IMAGE} judge/"}
+
+    # End-to-end check: actually run a trivial program through the sandbox
+    try:
+        result = judge_submission('print(1)', 'python', [{'points': 1, 'test_cases': [{'input': '', 'output': '1'}]}], 5000, 64)
+    except JudgeError as e:
+        return {'ok': False, 'sandbox': 'docker', 'message': f'The sandbox test run failed: {e}'}
+    if result['batch_results'][0]['status'] != 'AC':
+        return {'ok': False, 'sandbox': 'docker', 'message': 'The sandbox test run did not produce the expected output.'}
+    return {'ok': True, 'sandbox': 'docker', 'message': 'The judge is working.'}
+
+
+def check_judge(force: bool = False) -> Dict[str, Any]:
+    """Is the judge able to run submissions? Result is cached briefly so polling stays cheap."""
+    now = time.monotonic()
+    if not force and _health_cache['result'] is not None and now - _health_cache['at'] < HEALTH_CACHE_SECONDS:
+        return _health_cache['result']
+    result = _check_judge_uncached()
+    _health_cache.update(at=now, result=result)
+    return result
 
 
 def _sandboxed_command(workdir: str, runner_args: List[str], writable: bool, memory_mb: int, name: str) -> List[str]:

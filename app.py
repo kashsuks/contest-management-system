@@ -11,7 +11,7 @@ import secrets
 from datetime import datetime
 import pytz
 from urllib.parse import urlparse
-from judge.judge import judge_submission
+from judge.judge import judge_submission, check_judge, JudgeError
 from credentials_pdf import build_credentials_pdf
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -451,6 +451,15 @@ def get_problem(problem_id):
         data['batches'] = problem.batches
     return jsonify(data)
 
+@app.route('/judge_status')
+@login_required
+def judge_status():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    return jsonify(check_judge(force=request.args.get('refresh') == '1'))
+
+JUDGE_UNAVAILABLE_MESSAGE = 'The judge is temporarily unavailable. Please tell an organiser.'
+
 @app.route('/submit', methods=['POST'])
 @login_required
 @limiter.limit('6 per minute')
@@ -519,6 +528,11 @@ def submit():
             db.session.commit()
             return jsonify(result)
             
+        except JudgeError as e:
+            app.logger.error('Judge unavailable: %s', e)
+            submission.status = 'ERROR'
+            db.session.commit()
+            return jsonify({'error': JUDGE_UNAVAILABLE_MESSAGE}), 503
         except Exception as e:
             app.logger.exception('Judge error')
             submission.status = 'ERROR'
@@ -583,6 +597,9 @@ def run_code():
             
             return jsonify(result)
             
+        except JudgeError as e:
+            app.logger.error('Judge unavailable: %s', e)
+            return jsonify({'error': JUDGE_UNAVAILABLE_MESSAGE}), 503
         except Exception as e:
             app.logger.exception('Run error')
             return jsonify({'error': 'The judge failed to run this code'}), 500
@@ -761,6 +778,9 @@ if __name__ == '__main__':
                     'leaderboard_frozen': False
                 }, f, indent=4)
     
+    judge_health = check_judge(force=True)
+    print(('Judge OK: ' if judge_health['ok'] else 'WARNING - JUDGE UNAVAILABLE: ') + judge_health['message'])
+
     # Debug mode (Werkzeug debugger + reloader) is opt-in: set FLASK_DEBUG=1 for local development only
     debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
     host = os.environ.get('HOST', '0.0.0.0')  # all interfaces so contestants on the LAN can connect

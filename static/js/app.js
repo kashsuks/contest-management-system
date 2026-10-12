@@ -796,6 +796,25 @@ async function route() {
     }
 }
 
+// ---------------------------------------------------------------- judge health (admins)
+async function checkJudge(refresh = false) {
+    const result = await api(`/judge_status${refresh ? '?refresh=1' : ''}`);
+    const banner = $('#judgeBanner');
+    if (!result.ok || !result.data) return;
+    const { ok, warning, message } = result.data;
+    banner.hidden = ok && !warning;
+    banner.classList.toggle('warning', ok && !!warning);
+    $('#judgeBannerText').textContent = ok
+        ? message
+        : `Judge unavailable: ${message} Contestants cannot run or submit code until this is fixed.`;
+}
+
+function startJudgeMonitor() {
+    $('#judgeRecheck').addEventListener('click', () => checkJudge(true));
+    checkJudge();
+    setInterval(checkJudge, 30000);
+}
+
 // ---------------------------------------------------------------- init
 function wireProblemPage() {
     $('#language').addEventListener('change', () => {
@@ -836,6 +855,8 @@ async function init() {
     $('#avatar').textContent = state.user.charAt(0);
     $('#adminNav').hidden = !state.isAdmin;
     state.contestName = $('#brandName').textContent.trim() || state.contestName;
+
+    if (state.isAdmin) startJudgeMonitor();
 
     await Promise.all([loadProblems(), loadSubmissions()]);
     window.addEventListener('hashchange', route);

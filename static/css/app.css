@@ -128,6 +128,11 @@ hr { border-color: var(--border); opacity: 1; }
 :root[data-theme="light"] .icon-moon { display: inline; }
 
 /* ---------- layout ---------- */
+.judge-banner {
+    display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; text-align: center;
+    padding: .6rem 1rem; background: var(--wa-bg); color: var(--text); border-bottom: 1px solid var(--wa); font-weight: 550;
+}
+.judge-banner.warning { background: var(--accent-bg); border-bottom-color: var(--accent); }
 .page { max-width: 1280px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
 .page-head h1 { font-size: 1.6rem; margin: 0; }
