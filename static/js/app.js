@@ -679,6 +679,55 @@ function wireAdmin() {
         }
     });
 
+    let bulkPdfUrl = null;
+    $('#bulkUsersForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        showFormError('#bulkError', '');
+        $('#bulkResult').hidden = true;
+        const count = parseInt($('#bulkCount').value, 10);
+        const prefix = $('#bulkPrefix').value.trim();
+        const button = $('#bulkButton');
+        setBusy(button, true, 'Creating accounts...');
+        try {
+            const response = await fetch('/create_users_batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ count, prefix }),
+            });
+            if (response.redirected && new URL(response.url).pathname === '/login') {
+                window.location.href = '/login';
+                return;
+            }
+            if (!response.ok) {
+                let data = null;
+                try { data = await response.json(); } catch (e) { /* not JSON */ }
+                showFormError('#bulkError', friendlyError({ status: response.status, data }));
+                return;
+            }
+
+            const blob = await response.blob();
+            if (bulkPdfUrl) URL.revokeObjectURL(bulkPdfUrl);
+            bulkPdfUrl = URL.createObjectURL(blob);
+            const match = (response.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/);
+            const filename = match ? match[1] : 'accounts.pdf';
+
+            const link = $('#bulkDownloadAgain');
+            link.href = bulkPdfUrl;
+            link.download = filename;
+            link.click(); // start the first download straight away
+
+            $('#bulkResultTitle').textContent = `Created ${response.headers.get('X-Accounts-Created')} accounts: ` +
+                `${response.headers.get('X-First-Username')} to ${response.headers.get('X-Last-Username')}.`;
+            $('#bulkResult').hidden = false;
+            toast('Accounts created. The PDF has been downloaded.', 'success');
+            loadLeaderboard();
+        } catch (error) {
+            showFormError('#bulkError', 'Could not reach the server.');
+        } finally {
+            setBusy(button, false);
+        }
+    });
+
     $('#contestSettingsForm').addEventListener('submit', async event => {
         event.preventDefault();
         const button = $('#saveSettingsButton');
