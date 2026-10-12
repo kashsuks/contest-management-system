@@ -285,7 +285,11 @@ textarea.mono, .mono { font-family: var(--mono); font-size: .875rem; }
 .lb-cell.first { background: var(--ac-bg); }
 .lb-cell.empty-cell { color: var(--text-2); }
 tr.me td { background: var(--me-bg); }
-.you-tag { margin-left: .4rem; font-size: .7rem; font-weight: 700; color: var(--accent); background: var(--accent-bg); padding: .05rem .4rem; border-radius: 999px; }
+.you-tag {
+    display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+    margin-left: .4rem; height: 1.25rem; padding: 0 .5rem; line-height: 1; border-radius: 999px;
+    font-size: .7rem; font-weight: 700; color: var(--accent); background: var(--accent-bg);
+}
 .banner { display: flex; gap: .6rem; align-items: flex-start; padding: .75rem 1rem; border-radius: var(--radius-sm); background: var(--accent-bg); color: var(--text); border: 1px solid var(--accent-ring); margin-bottom: 1rem; }
 .banner strong { color: var(--accent); }
 
