@@ -767,9 +767,17 @@ function wireProblemPage() {
     $('#submitBtn').addEventListener('click', submitCode);
 }
 
+// Saved drafts live in this browser, so on a shared computer they must not outlive the person who wrote them
+function clearSavedData() {
+    try {
+        Object.keys(localStorage).filter(key => key.startsWith('cms:')).forEach(key => localStorage.removeItem(key));
+    } catch (e) { /* storage unavailable */ }
+}
+
 async function init() {
     wireProblemPage();
     wireAdmin();
+    $('form[action="/logout"]').addEventListener('submit', clearSavedData);
 
     const [name, admin] = await Promise.all([api('/username'), api('/check_admin')]);
     state.user = name.ok ? name.text.trim() : ''; // /username returns plain text
