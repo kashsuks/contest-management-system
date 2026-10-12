@@ -4,7 +4,7 @@ flask-login==0.6.3
 flask-socketio==5.7.0
 werkzeug==3.1.9
 sqlalchemy==2.1.4
-psutil==7.2.2
 pytz==2026.5
 python-dotenv==1.2.4
 flask-limiter==4.0.0
+fpdf2==2.8.9
