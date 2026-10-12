@@ -108,6 +108,7 @@ fi
 step "Setup complete"
 cat <<EOF
 Admin login:  username 'admin', password is ADMIN_PASSWORD in .env  (view with: grep ADMIN_PASSWORD .env)
+              (to change it later: venv/bin/python manage.py reset-admin-password)
 Contestants:  open http://${LAN_IP:-<this-machine-ip>}:5000 on the same network
 Start server: ./setup.sh --start    (or: venv/bin/python app.py)
 
