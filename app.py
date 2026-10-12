@@ -38,7 +38,7 @@ if not secret_key:
         "python -c \"import secrets; print(secrets.token_hex(32))\""
     )
 app.config['SECRET_KEY'] = secret_key
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///coding_contest.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # reject request bodies over 5 MB
 app.config['SESSION_COOKIE_HTTPONLY'] = True
