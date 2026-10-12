@@ -19,6 +19,7 @@ admin area.
 - Create contestant accounts one by one, or in bulk with a printable A4 PDF of logins
 - Reset passwords, disable or delete accounts
 - See every submission and its code, rejudge one submission or a whole problem after fixing a test
+- Automatic database backups, plus `manage.py backup` / `restore`
 - Freeze the leaderboard, stop submissions, export final standings and all submissions as CSV
 - A banner warns you if the judge (Docker) stops working
 
@@ -54,13 +55,32 @@ Set these in `.env` or the environment:
 | `JUDGE_IMAGE` | Docker image used for judging | `cms-judge` |
 | `JUDGE_SANDBOX` | `docker`, or `local` for development only (**not sandboxed**) | `docker` |
 | `FLASK_DEBUG` | `1` enables the debugger and reloader (development only) | off |
-| `RESET_DB` | `1` wipes the database on start | off |
+| `RESET_DB` | `1` wipes the database on start (a backup is taken first) | off |
+| `BACKUP_INTERVAL_MINUTES` | How often the server copies the database when it changed; `0` turns the timer off | `10` |
+| `BACKUP_DIR` | Where backups go | `backups` |
+| `BACKUP_KEEP` / `BACKUP_KEEP_AUTOMATIC` | How many timer copies / other automatic copies to keep | `48` / `100` |
 
 ## Maintenance
 
 ```bash
 venv/bin/python manage.py reset-admin-password   # set a new admin password without losing data
+venv/bin/python manage.py backup --note round-2  # copy the database and settings to backups/ right now
+venv/bin/python manage.py list-backups
+venv/bin/python manage.py restore <file>         # replace the database with a backup (asks first, saves the current one)
 ```
+
+### Backups
+
+The database holds every account, problem and submission, so the server protects it by itself. Copies go to
+`backups/` as normal SQLite files (next to a copy of the contest settings) and are safe to take while the server runs:
+
+- at startup, and every 10 minutes while something has changed;
+- just before it deletes a problem or an account, edits a problem, rejudges one, or wipes the database;
+- on demand with `manage.py backup`. These are never deleted automatically.
+
+Old automatic copies are thinned out (see `BACKUP_KEEP`). A failed backup is logged but never blocks an organiser.
+Copies live on the same computer, so before the contest also copy `backups/` somewhere else (a USB stick, say).
+Backups only work with the default SQLite database.
 
 ## Development
 
@@ -74,7 +94,8 @@ Project layout:
 ```
 app.py               Flask app: routes, models, admin API
 credentials_pdf.py   printable login slips
-manage.py            maintenance commands
+backup.py            database backup and restore
+manage.py            maintenance commands (admin password, backups)
 judge/               judge, in-container runner and the sandbox Dockerfile
 templates/ static/   pages, stylesheet, front-end code and vendored libraries
 tests/               pytest suite
