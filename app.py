@@ -13,7 +13,7 @@ import os
 import re
 import secrets
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 from urllib.parse import urlparse
 from judge.judge import judge_submission, check_judge, JudgeError
@@ -98,6 +98,46 @@ def load_contest_config():
 
 contest_config = load_contest_config()
 contest_timezone = pytz.timezone(contest_config.get('time_zone', 'UTC'))
+
+
+# ---- Contest schedule: optional start and end instants, stored in the config as UTC ISO-8601 strings
+def parse_instant(value):
+    """An ISO-8601 string with a time zone (or Z) as an aware UTC datetime, or None if it is not one."""
+    if not isinstance(value, str):
+        return None
+    try:
+        moment = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
+        return moment.astimezone(timezone.utc) if moment.tzinfo else None
+    except (ValueError, OverflowError):
+        return None
+
+
+def format_instant(moment):
+    return moment.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') if moment else None
+
+
+def contest_phase(now=None):
+    """'upcoming' before the start, 'ended' from the end on, otherwise 'running' (also when nothing is scheduled)."""
+    now = now or datetime.now(timezone.utc)
+    start = parse_instant(contest_config.get('start_time'))
+    end = parse_instant(contest_config.get('end_time'))
+    if start and now < start:
+        return 'upcoming'
+    if end and now >= end:
+        return 'ended'
+    return 'running'
+
+
+def schedule_block_message(user):
+    """Why `user` may not work on problems right now because of the schedule, or None. Organisers are never blocked."""
+    if user.is_admin:
+        return None
+    phase = contest_phase()
+    if phase == 'upcoming':
+        return 'The contest has not started yet'
+    if phase == 'ended':
+        return 'The contest has ended'
+    return None
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -481,15 +521,18 @@ def create_problem():
         db.session.add(problem)
         db.session.commit()
         
-        # Emit WebSocket event for new problem
-        socketio.emit('new_problem', {
-            'id': problem.id,
-            'title': problem.title,
-            'shortname': problem.shortname,
-            'difficulty': problem.difficulty,
-            'time_limit': problem.time_limit,
-            'memory_limit': problem.memory_limit
-        })
+        # Emit WebSocket event for new problem (nothing about it may leak before the contest starts)
+        if contest_phase() == 'upcoming':
+            socketio.emit('problems_changed')
+        else:
+            socketio.emit('new_problem', {
+                'id': problem.id,
+                'title': problem.title,
+                'shortname': problem.shortname,
+                'difficulty': problem.difficulty,
+                'time_limit': problem.time_limit,
+                'memory_limit': problem.memory_limit
+            })
         
         return jsonify({'message': 'Problem created successfully', 'id': problem.id}), 201
     except Exception as e:
@@ -500,6 +543,8 @@ def create_problem():
 @app.route('/problems')
 @login_required
 def get_problems():
+    if not current_user.is_admin and contest_phase() == 'upcoming':
+        return jsonify([])  # problems stay hidden until the contest starts
     problems = Problem.query.order_by(Problem.created_at.desc()).all()
     counts = {}
     if current_user.is_admin:
@@ -523,6 +568,8 @@ def get_problems():
 @app.route('/problem/<int:problem_id>')
 @login_required
 def get_problem(problem_id):
+    if not current_user.is_admin and contest_phase() == 'upcoming':
+        return jsonify({'error': schedule_block_message(current_user)}), 403
     problem = db.get_or_404(Problem, problem_id)
     data = {
         'id': problem.id,
@@ -612,7 +659,10 @@ JUDGE_UNAVAILABLE_MESSAGE = 'The judge is temporarily unavailable. Please tell a
 def submit():
     if contest_config.get('submissions_stopped', False):
         return jsonify({'error': 'Submissions have been stopped'}), 400
-    
+    blocked = schedule_block_message(current_user)
+    if blocked:
+        return jsonify({'error': blocked}), 403
+
     try:
         data = request.get_json()
         if not data:
@@ -688,6 +738,9 @@ def submit():
 def run_code():
     if contest_config.get('submissions_stopped', False) and not current_user.is_admin:
         return jsonify({'error': 'Submissions have been stopped'}), 400
+    blocked = schedule_block_message(current_user)
+    if blocked:
+        return jsonify({'error': blocked}), 403
 
     try:
         data = request.get_json()
@@ -785,6 +838,8 @@ def build_leaderboard(frozen):
 def get_leaderboard():
     is_frozen = contest_config.get('leaderboard_frozen', False)
     problems, rows = build_leaderboard(is_frozen)
+    if not current_user.is_admin and contest_phase() == 'upcoming':
+        problems = []  # problem names stay hidden until the contest starts
     return jsonify({
         'problems': [{'id': p.id, 'title': p.title, 'shortname': p.shortname} for p in problems],
         'users': rows,
@@ -842,6 +897,18 @@ def problem_creation():
         return jsonify({'error': 'Unauthorized'}), 403
     return render_template('problem_creation.html')
 
+@app.route('/contest_state')
+@login_required
+def get_contest_state():
+    """The schedule as every client needs it. `server_time` lets the browser correct for a wrong clock."""
+    return jsonify({
+        'phase': contest_phase(),
+        'start_time': contest_config.get('start_time'),
+        'end_time': contest_config.get('end_time'),
+        'server_time': format_instant(datetime.now(timezone.utc)),
+        'submissions_stopped': bool(contest_config.get('submissions_stopped', False)),
+    })
+
 @app.route('/contest_settings')
 @login_required
 def get_contest_settings():
@@ -863,11 +930,31 @@ def update_contest_settings():
     for flag in ('leaderboard_frozen', 'submissions_stopped'):
         if flag in data and not isinstance(data[flag], bool):
             return jsonify({'error': f'{flag} must be true or false'}), 400
-    
+
+    # Schedule: null (or empty) clears a time; anything else must be an ISO-8601 instant with a time zone
+    schedule = {key: contest_config.get(key) for key in ('start_time', 'end_time')}
+    for key, label in (('start_time', 'Start time'), ('end_time', 'End time')):
+        if key not in data:
+            continue
+        if data[key] in (None, ''):
+            schedule[key] = None
+            continue
+        moment = parse_instant(data[key])
+        if moment is None:
+            return jsonify({'error': f'{label} is not a valid date and time'}), 400
+        schedule[key] = format_instant(moment)
+    if schedule['start_time'] and schedule['end_time'] and parse_instant(schedule['end_time']) <= parse_instant(schedule['start_time']):
+        return jsonify({'error': 'The end time must be after the start time'}), 400
+
     contest_config['contest_name'] = data['contest_name'].strip()
+    for key, value in schedule.items():
+        if value is None:
+            contest_config.pop(key, None)
+        else:
+            contest_config[key] = value
     
     # Handle leaderboard freeze
-    if 'leaderboard_frozen' in data:
+    if 'leaderboard_frozen' in data and data['leaderboard_frozen'] != contest_config.get('leaderboard_frozen', False):
         contest_config['leaderboard_frozen'] = data['leaderboard_frozen']
         if contest_config['leaderboard_frozen']:
             socketio.emit('update_leaderboard', 'Leaderboard has been frozen. The displayed leaderboard may not reflect the most recent standings.')
@@ -884,7 +971,8 @@ def update_contest_settings():
     # Save to config file
     with open('config/contest_config.json', 'w') as f:
         json.dump(contest_config, f, indent=4)
-    
+
+    socketio.emit('contest_changed')
     return jsonify({'message': 'Settings updated successfully'})
 
 

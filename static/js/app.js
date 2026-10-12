@@ -164,12 +164,100 @@ const state = {
     submissions: [],
     leaderboard: null,
     settings: null,
+    contest: { start: null, end: null, offset: 0, phase: 'running', stopped: false }, // see loadContestState
 };
 
 let routeToken = 0;
 
 function setTitle(part) {
     document.title = part ? `${part} · ${state.contestName}` : state.contestName;
+}
+
+// ---------------------------------------------------------------- contest schedule
+const pad2 = n => String(n).padStart(2, '0');
+
+function fmtCountdown(ms) {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const days = Math.floor(total / 86400), hours = Math.floor(total % 86400 / 3600);
+    const clock = `${pad2(hours)}:${pad2(Math.floor(total % 3600 / 60))}:${pad2(total % 60)}`;
+    return days ? `${days}d ${clock}` : clock;
+}
+
+/** The server's clock, as far as we can tell: our own clock corrected by the offset measured in loadContestState. */
+const serverNow = () => Date.now() + state.contest.offset;
+
+function phaseNow() {
+    const { start, end } = state.contest;
+    if (start !== null && serverNow() < start) return 'upcoming';
+    if (end !== null && serverNow() >= end) return 'ended';
+    return 'running';
+}
+
+async function loadContestState() {
+    const result = await api('/contest_state');
+    if (!result.ok || !result.data) return;
+    const { start_time, end_time, server_time, submissions_stopped } = result.data;
+    state.contest = {
+        start: start_time ? Date.parse(start_time) : null,
+        end: end_time ? Date.parse(end_time) : null,
+        offset: Date.parse(server_time) - Date.now(),
+        phase: 'running',
+        stopped: !!submissions_stopped,
+    };
+    state.contest.phase = phaseNow();
+    renderClock();
+    renderProblems();
+}
+
+/** Counts down to the start, then to the end; says nothing for contests with no schedule. */
+function renderClock() {
+    const clock = $('#contestClock');
+    const { start, end } = state.contest;
+    const phase = phaseNow();
+    let text = '', cls = '', title = '';
+    if (phase === 'upcoming') {
+        text = `Starts in ${fmtCountdown(start - serverNow())}`;
+        title = `Starts ${new Date(start).toLocaleString()}`;
+    } else if (phase === 'ended') {
+        text = 'Contest ended';
+        cls = 'over';
+        title = `Ended ${new Date(end).toLocaleString()}`;
+    } else if (end !== null) {
+        const left = end - serverNow();
+        text = `${fmtCountdown(left)} left`;
+        cls = left <= 10 * 60 * 1000 ? 'soon' : '';
+        title = `Ends ${new Date(end).toLocaleString()}`;
+    } else if (state.contest.stopped) {
+        text = 'Submissions closed';
+        cls = 'over';
+    }
+    clock.hidden = !text;
+    clock.className = `contest-clock ${cls}`.trim();
+    if (clock.textContent !== text) clock.textContent = text;
+    clock.title = title;
+}
+
+/** Once a second: update the clock and react when the contest starts or ends without anyone refreshing the page. */
+function tickClock() {
+    renderClock();
+    const phase = phaseNow();
+    if (phase === state.contest.phase) return;
+    const before = state.contest.phase;
+    state.contest.phase = phase;
+    if (before === 'upcoming' && phase !== 'upcoming') {
+        toast('The contest has started. Good luck!', 'success');
+        loadProblems();
+        loadLeaderboard();
+    } else if (phase === 'ended') {
+        toast('The contest has ended. Submissions are closed.', 'info', 8000);
+    }
+    loadContestState(); // re-sync with the server
+}
+
+function startContestClock() {
+    renderClock();
+    setInterval(tickClock, 1000);
+    setInterval(loadContestState, 60000); // picks up changes made while a socket event was missed
 }
 
 // ---------------------------------------------------------------- data loaders
@@ -208,6 +296,13 @@ function progressFor(problem) {
 
 function renderProblems() {
     const list = $('#problemList');
+    if (!state.problems.length && !state.isAdmin && phaseNow() === 'upcoming') {
+        list.replaceChildren(el('div', { class: 'empty' },
+            el('h3', { text: 'The contest has not started yet' }),
+            el('p', { text: `Problems appear here at ${new Date(state.contest.start).toLocaleString()}. This page updates by itself.` })));
+        $('#problemsSummary').textContent = '';
+        return;
+    }
     if (!state.problems.length) {
         list.replaceChildren(el('div', { class: 'empty' },
             el('h3', { text: 'No problems yet' }),
@@ -295,7 +390,7 @@ async function showProblem(id, token) {
     const result = await api(`/problem/${id}`);
     if (token !== routeToken) return; // user navigated away while loading
     if (!result.ok) {
-        toast('Could not open that problem.', 'error');
+        toast(result.status === 403 && result.data ? result.data.error : 'Could not open that problem.', 'error');
         location.hash = '#/problems';
         return;
     }
@@ -683,6 +778,22 @@ async function loadSettings() {
     $('#contestName').value = result.data.contest_name || '';
     $('#leaderboardFrozen').checked = !!result.data.leaderboard_frozen;
     $('#submissionStop').checked = !!result.data.submissions_stopped;
+    $('#startTime').value = toLocalInput(result.data.start_time);
+    $('#endTime').value = toLocalInput(result.data.end_time);
+    $('#timeZoneHint').textContent = `Times use this computer's time zone (${Intl.DateTimeFormat().resolvedOptions().timeZone}).`;
+}
+
+/** ISO instant -> value for <input type="datetime-local"> in local time ('' when unset). */
+function toLocalInput(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** <input type="datetime-local"> value (local time) -> ISO instant, or null when empty. */
+function fromLocalInput(value) {
+    const moment = value ? new Date(value) : null;
+    return moment && !Number.isNaN(moment.getTime()) ? moment.toISOString().replace(/\.\d{3}Z$/, 'Z') : null;
 }
 
 function setContestName(name) {
@@ -775,6 +886,8 @@ function wireAdmin() {
         }
     });
 
+    $$('[data-clear-time]').forEach(button => button.addEventListener('click', () => { $(`#${button.dataset.clearTime}`).value = ''; }));
+
     $('#contestSettingsForm').addEventListener('submit', async event => {
         event.preventDefault();
         const button = $('#saveSettingsButton');
@@ -785,10 +898,13 @@ function wireAdmin() {
                 contest_name: name,
                 leaderboard_frozen: $('#leaderboardFrozen').checked,
                 submissions_stopped: $('#submissionStop').checked,
+                start_time: fromLocalInput($('#startTime').value),
+                end_time: fromLocalInput($('#endTime').value),
             });
             if (result.ok) {
                 toast('Settings saved.', 'success');
                 setContestName(name);
+                loadContestState();
                 setTitle('Admin');
                 loadLeaderboard();
             } else {
@@ -1162,6 +1278,8 @@ async function init() {
 
     if (state.isAdmin) startJudgeMonitor();
 
+    await loadContestState();
+    startContestClock();
     await Promise.all([loadProblems(), loadSubmissions()]);
     window.addEventListener('hashchange', route);
     route();
@@ -1171,6 +1289,12 @@ async function init() {
     socket.on('update_leaderboard', async message => {
         await loadLeaderboard();
         if (typeof message === 'string' && message) toast(message, 'info');
+    });
+    // An organiser changed the schedule or the submission switch
+    socket.on('contest_changed', async () => {
+        await loadContestState();
+        loadProblems();
+        loadLeaderboard();
     });
     socket.on('new_problem', problem => {
         loadProblems();
