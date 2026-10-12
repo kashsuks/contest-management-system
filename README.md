@@ -7,7 +7,7 @@ admin area.
 ## Features
 
 **For contestants**
-- Problems with Markdown statements, difficulty, time and memory limits, and partial scoring in batches
+- Problems with Markdown statements and LaTeX maths (`$x_i \le 10^9$`, `$$ ... $$`, rendered offline with KaTeX), difficulty, time and memory limits, and partial scoring in batches
 - In-browser editor with syntax highlighting for Python, C++ and Java; code is saved as you type
 - Run your code against your own input before submitting
 - Detailed results per batch and test, with a read-only view of every past submission
