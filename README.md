@@ -12,7 +12,7 @@ admin area.
 - Run your code against your own input before submitting
 - Detailed results per batch and test, with a read-only view of every past submission
 - Live leaderboard (can be frozen by the organiser)
-- Light and dark themes, usable on phones
+- Clean light theme, usable on phones
 
 **For organisers**
 - Create, edit and delete problems; upload test cases as a zip (`input001.txt` / `output001.txt`, ...)
