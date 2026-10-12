@@ -728,7 +728,7 @@ function renderLeaderboard() {
             el('td', {}, user.username, isMe ? el('span', { class: 'you-tag', text: 'you' }) : null),
             ...user.problem_points.map((cell, i) => el('td', {
                 class: `lb-cell${cell.points > 0 && firstSolve[i] && firstSolve[i].user === user.username ? ' first' : ''}${cell.points > 0 ? '' : ' empty-cell'}`,
-            }, cell.points > 0 ? [String(cell.points), el('small', { text: cell.submission_time || '' })] : '·')),
+            }, cell.points > 0 ? el('div', { class: 'lb-score' }, String(cell.points), el('small', { text: cell.submission_time || '' })) : '·')),
             el('td', { class: 'num' }, el('strong', { text: user.total_points })));
     }));
 }
