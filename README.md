@@ -11,7 +11,7 @@ An in-person coding contest platform built using modern technologies
 - Real-time subprocess-based code execution and judging
 - Submission history
 - Problem creation form with title, description, time and memory limits, and test cases
-- Admin-only panel for problem creation, user account creation, etc.
+- Admin-only panel for problem creation, user account creation (single or in bulk with a printable PDF of logins), etc.
 - Leaderboard that ranks participants in real time (can be frozen to not display updates)
 
 ## Prerequisites

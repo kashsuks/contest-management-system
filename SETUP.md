@@ -52,6 +52,20 @@ python app.py
 
 On first start an `admin` user is created with the password from `ADMIN_PASSWORD` (at least 8 characters, set in `.env`); the app refuses to start without it. The password is never printed or logged. There is no public registration: the admin creates contestant accounts from the admin panel.
 
+`ADMIN_PASSWORD` is only read when the admin account is first created, so editing `.env` later changes nothing. To set a new admin password (without wiping any data), run:
+
+```bash
+venv/bin/python manage.py reset-admin-password
+```
+
+### Creating contestant accounts
+
+Admin -> Users has two forms:
+- **Create a contestant account** for a single user.
+- **Create accounts in bulk**: enter how many accounts you need (1-200) and a username prefix (default `User`). The accounts are created as `User1`, `User2`, ... (continuing after any that already exist) with random passwords, and a PDF is downloaded with one slip per account (`Username:` / `Password:`), nine to a page on US Letter, ready to print and cut up.
+
+Passwords are stored hashed, so the PDF is the only place they can be read. Keep it safe, print it, then delete it (the page also offers "Download PDF again" until you leave it). If a password is lost, create a new account.
+
 ## Judge System Setup
 
 Contestant code is compiled and run inside a throwaway Docker container (no network, read-only filesystem, dropped capabilities, non-root user, memory / pid / CPU limits). Python, C++ (g++) and Java (JDK) are provided by the image, so you only need Docker on the machine running the server.
