@@ -47,12 +47,9 @@ def _check_judge_uncached() -> Dict[str, Any]:
     if daemon.returncode != 0:
         return {'ok': False, 'sandbox': 'docker', 'message': 'Docker is installed but not running. Start Docker on the server.'}
 
-    image = subprocess.run(['docker', 'image', 'inspect', DOCKER_IMAGE], capture_output=True, text=True, timeout=15)
-    if image.returncode != 0:
-        return {'ok': False, 'sandbox': 'docker',
-                'message': f"The judge image '{DOCKER_IMAGE}' is missing. Build it with: docker build -t {DOCKER_IMAGE} judge/"}
-
-    # End-to-end check: actually run a trivial program through the sandbox
+    # End-to-end check: actually run a trivial program through the sandbox. (Asking Docker whether the image
+    # exists is not reliable on every setup, while running it always tells the truth, including a missing
+    # image, which comes back as a JudgeError that says how to build it.)
     try:
         result = judge_submission('print(1)', 'python', [{'points': 1, 'test_cases': [{'input': '', 'output': '1'}]}], 5000, 64)
     except JudgeError as e:
@@ -80,6 +77,7 @@ def _sandboxed_command(workdir: str, runner_args: List[str], writable: bool, mem
     return [
         'docker', 'run', '--rm', '-i', '--name', name,
         '--network', 'none',
+        '--pull', 'never',  # a missing judge image must fail fast, never be downloaded from a registry
         '--read-only', '--tmpfs', '/tmp:rw,exec,size=128m',
         '--memory', f'{memory_mb}m', '--memory-swap', f'{memory_mb}m',
         '--pids-limit', '64', '--cpus', '1',

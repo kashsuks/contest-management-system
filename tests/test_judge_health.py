@@ -45,11 +45,20 @@ def test_docker_not_responding(docker_mode):
     assert 'not responding' in check_judge(force=True)['message']
 
 
-def test_image_missing(docker_mode):
-    # `docker version` succeeds, `docker image inspect` fails
-    docker_mode.setattr(judge_module.subprocess, 'run', lambda cmd, **k: Completed(returncode=0 if cmd[1] == 'version' else 1))
+def test_image_missing_is_reported_with_the_build_command(docker_mode):
+    docker_mode.setattr(judge_module.subprocess, 'run', lambda *a, **k: Completed())  # docker itself is fine
+
+    def run_missing_image(*args, **kwargs):
+        raise JudgeError('Docker could not run the judge image "cms-judge": Unable to find image (build it with: docker build -t cms-judge judge/)')
+    docker_mode.setattr(judge_module, 'judge_submission', run_missing_image)
     result = check_judge(force=True)
     assert not result['ok'] and 'docker build' in result['message']
+
+
+def test_docker_run_never_pulls_images(monkeypatch):
+    monkeypatch.setattr(judge_module, 'SANDBOX', 'docker')
+    command = judge_module._sandboxed_command('/tmp/x', ['1000', '64', 'true'], False, 128, 'name')
+    assert command[command.index('--pull') + 1] == 'never'
 
 
 def test_healthy_docker_runs_a_smoke_test(docker_mode):
