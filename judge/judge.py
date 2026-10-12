@@ -123,8 +123,10 @@ def _execute(workdir: str, command: List[str], stdin: str, time_limit_ms: int, m
             return {'timed_out': False, 'returncode': -9, 'stdout': '', 'stderr': '', 'time_ms': 0,
                     'memory_kb': memory_limit_mb * 1024 + 1}
         if completed.returncode in (125, 126, 127):
+            if 'No such image' in completed.stderr or 'Unable to find image' in completed.stderr:
+                raise JudgeError(f"The judge image '{DOCKER_IMAGE}' is missing. Build it with: docker build -t {DOCKER_IMAGE} judge/")
             raise JudgeError(f'Docker could not run the judge image "{DOCKER_IMAGE}": {completed.stderr.strip()[-300:]}'
-                             ' (build it with: docker build -t cms-judge judge/)')
+                             f' (build it with: docker build -t {DOCKER_IMAGE} judge/)')
 
     try:
         return json.loads(completed.stdout)

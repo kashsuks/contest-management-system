@@ -55,6 +55,16 @@ def test_image_missing_is_reported_with_the_build_command(docker_mode):
     assert not result['ok'] and 'docker build' in result['message']
 
 
+def test_missing_image_error_is_a_clean_sentence(monkeypatch):
+    monkeypatch.setattr(judge_module, 'SANDBOX', 'docker')
+    monkeypatch.setattr(judge_module, 'DOCKER_IMAGE', 'cms-judge')
+    stderr = "docker: Error response from daemon: No such image: cms-judge:latest\n\nRun 'docker run --help' for more information"
+    monkeypatch.setattr(judge_module.subprocess, 'run', lambda *a, **k: Completed(returncode=125, stderr=stderr))
+    with pytest.raises(JudgeError) as caught:
+        judge_module._execute('/tmp/x', ['true'], '', 1000, 64)
+    assert str(caught.value) == "The judge image 'cms-judge' is missing. Build it with: docker build -t cms-judge judge/"
+
+
 def test_docker_run_never_pulls_images(monkeypatch):
     monkeypatch.setattr(judge_module, 'SANDBOX', 'docker')
     command = judge_module._sandboxed_command('/tmp/x', ['1000', '64', 'true'], False, 128, 'name')
