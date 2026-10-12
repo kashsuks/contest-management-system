@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -7,11 +7,14 @@ from flask_socketio import SocketIO
 import json
 import os
 import re
+import secrets
 from datetime import datetime
 import pytz
 from urllib.parse import urlparse
 from judge.judge import judge_submission
-from sqlalchemy import select
+from credentials_pdf import build_credentials_pdf
+from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
@@ -19,6 +22,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9_]{3,32}$')
+BULK_PREFIX_PATTERN = re.compile(r'^[A-Za-z0-9_]{1,24}$')
+BULK_MAX_ACCOUNTS = 200
+# Generated passwords are printed, so leave out look-alikes (0/O, 1/l/I) that are easy to misread
+PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+GENERATED_PASSWORD_LENGTH = 10
 
 app = Flask(__name__)
 
@@ -293,6 +301,74 @@ def create_user():
     db.session.commit()
     
     return jsonify({'message': 'User created successfully'}), 201
+
+def next_username_number(prefix):
+    """One more than the highest number already used with this prefix (User1, User2, ... -> 3)."""
+    pattern = re.compile(rf'^{re.escape(prefix)}(\d+)$', re.IGNORECASE)
+    like = prefix.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+    rows = db.session.query(User.username).filter(User.username.ilike(like, escape='\\')).all()
+    numbers = [int(m.group(1)) for (name,) in rows if (m := pattern.match(name))]
+    return max(numbers, default=0) + 1
+
+@app.route('/create_users_batch', methods=['POST'])
+@login_required
+# Hashing hundreds of passwords is the expensive part, so only successful batches count toward the limit
+@limiter.limit('5 per minute', deduct_when=lambda response: response.status_code == 200)
+def create_users_batch():
+    """Create `count` accounts with random passwords and return a printable PDF of the credentials.
+
+    Passwords are only ever stored hashed, so this PDF is the single place they can be read.
+    """
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    count = data.get('count')
+    prefix = data.get('prefix', 'User')
+    if not _is_int(count) or not 1 <= count <= BULK_MAX_ACCOUNTS:
+        return jsonify({'error': f'Number of accounts must be between 1 and {BULK_MAX_ACCOUNTS}'}), 400
+    if not isinstance(prefix, str) or not BULK_PREFIX_PATTERN.match(prefix):
+        return jsonify({'error': 'Prefix must be 1-24 characters: letters, digits or underscore'}), 400
+
+    start = next_username_number(prefix)
+    usernames = [f'{prefix}{start + offset}' for offset in range(count)]
+    if len(usernames[-1]) > 32:
+        return jsonify({'error': 'Those usernames would be longer than 32 characters; use a shorter prefix'}), 400
+    taken = db.session.query(User.username).filter(func.lower(User.username).in_([u.lower() for u in usernames])).first()
+    if taken:
+        return jsonify({'error': f'The username {taken[0]} already exists'}), 409
+
+    try:
+        accounts = []
+        for username in usernames:
+            password = ''.join(secrets.choice(PASSWORD_ALPHABET) for _ in range(GENERATED_PASSWORD_LENGTH))
+            user = User(username=username, email=f'{username.lower()}@contest.invalid')
+            user.set_password(password)
+            db.session.add(user)
+            accounts.append((username, password))
+
+        # Build the PDF before committing so a failure can't leave accounts whose passwords nobody has
+        pdf = build_credentials_pdf(accounts, contest_config.get('contest_name', 'Coding Contest'),
+                                    request.host_url.rstrip('/'))
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Some of those usernames or emails already exist. Please try again.'}), 409
+    except Exception:
+        app.logger.exception('Bulk account creation failed')  # never log the passwords
+        db.session.rollback()
+        return jsonify({'error': 'Could not create the accounts'}), 500
+
+    socketio.emit('update_leaderboard')
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="accounts-{usernames[0]}-to-{usernames[-1]}.pdf"',
+        'Cache-Control': 'no-store',
+        'X-Accounts-Created': str(count),
+        'X-First-Username': usernames[0],
+        'X-Last-Username': usernames[-1],
+    })
 
 @app.route('/create_problem', methods=['POST'])
 @login_required
