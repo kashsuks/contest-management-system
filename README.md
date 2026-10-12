@@ -19,6 +19,7 @@ admin area.
 - Create contestant accounts one by one, or in bulk with a printable A4 PDF of logins
 - Reset passwords, disable or delete accounts
 - See every submission and its code, rejudge one submission or a whole problem after fixing a test
+- Schedule the contest: set a start and end time (Admin → Settings). Problems stay hidden until the start, submissions close at the end, and everyone sees a live countdown
 - Freeze the leaderboard, stop submissions, export final standings and all submissions as CSV
 - A banner warns you if the judge (Docker) stops working
 

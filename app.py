@@ -914,7 +914,7 @@ def update_contest_settings():
             contest_config[key] = value
     
     # Handle leaderboard freeze
-    if 'leaderboard_frozen' in data:
+    if 'leaderboard_frozen' in data and data['leaderboard_frozen'] != contest_config.get('leaderboard_frozen', False):
         contest_config['leaderboard_frozen'] = data['leaderboard_frozen']
         if contest_config['leaderboard_frozen']:
             socketio.emit('update_leaderboard', 'Leaderboard has been frozen. The displayed leaderboard may not reflect the most recent standings.')

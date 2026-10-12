@@ -109,6 +109,12 @@ hr { border-color: var(--border); opacity: 1; }
 .main-nav a:hover { color: var(--text); background: var(--row-hover); text-decoration: none; }
 .main-nav a.active { color: var(--accent); background: var(--accent-bg); }
 .topbar-actions { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+.contest-clock {
+    display: inline-flex; align-items: center; padding: .3rem .7rem; border-radius: 999px; white-space: nowrap;
+    background: var(--accent-bg); color: var(--accent); font-weight: 650; font-size: .85rem; font-variant-numeric: tabular-nums;
+}
+.contest-clock.soon { background: var(--wa-bg); color: var(--wa); }
+.contest-clock.over { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
 .user-chip {
     display: inline-flex; align-items: center; gap: .5rem; color: var(--text-2); font-weight: 550; padding: 0 .25rem;
 }
@@ -199,7 +205,8 @@ textarea.mono, .mono { font-family: var(--mono); font-size: .875rem; }
     display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 0; border-top: 1px solid var(--border);
 }
 .switch-row:first-of-type { border-top: 0; }
-.switch-row .hint { color: var(--text-2); font-size: .875rem; }
+.hint { color: var(--text-2); font-size: .875rem; }
+.mb-3 > .hint { margin-top: .35rem; }
 .form-switch .form-check-input { width: 2.6em; height: 1.4em; }
 
 /* ---------- status chips ---------- */

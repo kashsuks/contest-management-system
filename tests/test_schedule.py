@@ -166,3 +166,20 @@ class TestSettingsValidation:
         schedule(admin, iso(HOUR), iso(2 * HOUR))
         settings = admin.get('/contest_settings').get_json()
         assert settings['start_time'] and settings['end_time']
+
+
+class TestFreezeNotice:
+    """Saving the settings form must not announce a freeze change that did not happen."""
+
+    def test_only_real_changes_are_announced(self, admin, app, monkeypatch):
+        messages = []
+        monkeypatch.setattr(app.socketio, 'emit', lambda name, *args, **kw: messages.append((name, args)))
+
+        def save(frozen):
+            admin.post('/update_contest_settings', json={'contest_name': 'T', 'leaderboard_frozen': frozen})
+            return [args[0] for name, args in messages if name == 'update_leaderboard' and args]
+
+        assert save(False) == []
+        assert 'frozen' in save(True)[-1]
+        assert len(save(True)) == 1               # saving again changes nothing
+        assert 'unfrozen' in save(False)[-1]
