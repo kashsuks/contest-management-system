@@ -5,6 +5,7 @@ Run with:  venv/bin/python -m pytest
 """
 import json
 import os
+import shutil
 import sys
 import tempfile
 
@@ -22,6 +23,7 @@ os.environ.update({
     'ADMIN_PASSWORD': 'AdminPass-123',
     'DATABASE_URL': f"sqlite:///{os.path.join(WORKDIR, 'test.db')}",
     'JUDGE_SANDBOX': 'local',  # no Docker needed for the test suite
+    'BACKUP_DIR': os.path.join(WORKDIR, 'backups'),
 })
 sys.path.insert(0, ROOT)
 
@@ -40,6 +42,7 @@ def fresh_database():
         app_module.db.drop_all()
         app_module.db.create_all()
         app_module.init_admin()
+    shutil.rmtree(os.environ['BACKUP_DIR'], ignore_errors=True)
     app_module.contest_config.clear()
     app_module.contest_config.update({'contest_name': 'Test Contest', 'time_zone': 'UTC'})
     yield

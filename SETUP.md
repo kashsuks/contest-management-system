@@ -126,7 +126,7 @@ The tests use a temporary database and the judge's local mode, so they need neit
 1. Set a unique, random SECRET_KEY in .env (never commit `.env`)
 2. Set up proper CORS configuration in production
 3. Use HTTPS in production
-4. Set up proper database backups
+4. Database backups are automatic (see "Backups" in the README); copy the `backups/` folder off this computer before the contest
 5. Monitor system resources
 
 ## Support

@@ -18,6 +18,7 @@ import pytz
 from urllib.parse import urlparse
 from judge.judge import judge_submission, check_judge, JudgeError
 from credentials_pdf import build_credentials_pdf
+import backup
 from sqlalchemy import select, func, inspect as sa_inspect, text
 from sqlalchemy.exc import IntegrityError
 from flask_limiter import Limiter
@@ -168,6 +169,43 @@ def ensure_schema():
     if 'disabled' not in columns:
         db.session.execute(text('ALTER TABLE "user" ADD COLUMN disabled BOOLEAN NOT NULL DEFAULT 0'))
         db.session.commit()
+
+# ---- Backups (see backup.py). Settings are read when used so they can be changed in .env or by tests
+def backup_dir():
+    return os.environ.get('BACKUP_DIR', backup.DEFAULT_DIR)
+
+def database_file():
+    return backup.sqlite_file(app.config['SQLALCHEMY_DATABASE_URI'], app.instance_path)
+
+def backup_limits():
+    def number(name, default):
+        try:
+            return max(1, int(os.environ.get(name, default)))
+        except ValueError:
+            return default
+    return number('BACKUP_KEEP', 48), number('BACKUP_KEEP_AUTOMATIC', 100)
+
+def make_backup(reason):
+    """Copy the database (and contest config) into the backup folder, then thin out old copies."""
+    path = database_file()
+    if path is None:
+        raise backup.BackupError('Backups only work with a file-based SQLite database')
+    created = backup.create_backup(path, backup_dir(), reason, config_path='config/contest_config.json')
+    keep_periodic, keep_automatic = backup_limits()
+    backup.prune(backup_dir(), keep_periodic, keep_automatic)
+    return created
+
+def snapshot(reason):
+    """Safety copy taken just before a risky change. Never raises: a failed backup must not stop an organiser mid-contest."""
+    try:
+        return make_backup(reason)
+    except Exception:
+        app.logger.exception('Could not take the %s backup', reason)
+        return None
+
+def periodic_backup():
+    if database_file() and backup.changed_since_last_backup(database_file(), backup_dir()):
+        make_backup('periodic')
 
 def generate_password():
     return ''.join(secrets.choice(PASSWORD_ALPHABET) for _ in range(GENERATED_PASSWORD_LENGTH))
@@ -514,6 +552,7 @@ def update_problem(problem_id):
         return jsonify({'error': error}), 400
 
     problem = db.get_or_404(Problem, problem_id)
+    snapshot('pre-edit-problem')
     problem.title = data['title'].strip()
     problem.description = data['description']
     problem.difficulty = data['difficulty']
@@ -531,6 +570,7 @@ def delete_problem(problem_id):
     if not current_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
     problem = db.get_or_404(Problem, problem_id)
+    snapshot('pre-delete-problem')
     deleted = Submission.query.filter_by(problem_id=problem.id).delete()
     db.session.delete(problem)
     db.session.commit()
@@ -983,6 +1023,7 @@ def admin_rejudge_problem(problem_id):
     if not ids:
         rejudge_job['running'] = False
         return jsonify({'message': 'There are no submissions to rejudge', 'total': 0})
+    snapshot('pre-rejudge-problem')
     threading.Thread(target=_rejudge_worker, args=(problem.id, ids), daemon=True).start()
     return jsonify({'message': 'Rejudge started', 'total': len(ids)}), 202
 
@@ -1032,6 +1073,7 @@ def admin_delete_user(user_id):
     user, error = _contestant_or_error(user_id)
     if error:
         return error
+    snapshot('pre-delete-user')
     deleted = Submission.query.filter_by(user_id=user.id).delete()
     db.session.delete(user)
     db.session.commit()
@@ -1110,8 +1152,13 @@ def export_submissions():
 if __name__ == '__main__':
     with app.app_context():
         # Data is kept across restarts; wiping it must be requested explicitly (RESET_DB=1)
+        existing_database = database_file() is not None and os.path.exists(database_file())
         if os.environ.get('RESET_DB', '0').lower() in ('1', 'true', 'yes'):
+            if existing_database:
+                snapshot('pre-reset')
             db.drop_all()
+        elif existing_database:
+            snapshot('startup')
         db.create_all()
         ensure_schema()
         
@@ -1127,6 +1174,17 @@ if __name__ == '__main__':
                     'leaderboard_frozen': False
                 }, f, indent=4)
     
+    # Copy the database every few minutes (only when something changed). BACKUP_INTERVAL_MINUTES=0 turns this off.
+    try:
+        backup_minutes = float(os.environ.get('BACKUP_INTERVAL_MINUTES', 10))
+    except ValueError:
+        backup_minutes = 10
+    if backup_minutes > 0 and database_file():
+        backup.PeriodicBackups(backup_minutes * 60, periodic_backup, log=app.logger.error).start()
+        print(f'Backups: every {backup_minutes:g} min (when data changed) into {os.path.abspath(backup_dir())}/')
+    else:
+        print('Backups: automatic timer is OFF (manual: venv/bin/python manage.py backup)')
+
     judge_health = check_judge(force=True)
     print(('Judge OK: ' if judge_health['ok'] else 'WARNING - JUDGE UNAVAILABLE: ') + judge_health['message'])
 
