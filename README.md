@@ -19,9 +19,9 @@ admin area.
 - Create contestant accounts one by one, or in bulk with a printable A4 PDF of logins
 - Reset passwords, disable or delete accounts
 - See every submission and its code, rejudge one submission or a whole problem after fixing a test
-- Automatic database backups, plus `manage.py backup` / `restore`
 - Freeze the leaderboard, stop submissions, export final standings and all submissions as CSV
 - A banner warns you if the judge (Docker) stops working
+- Automatic database backups, plus `manage.py backup` / `restore`
 
 **Judging**
 - Every compile and run happens in a throwaway Docker container: no network, read-only filesystem, non-root user,
