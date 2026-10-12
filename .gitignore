@@ -3,6 +3,7 @@
 /__pycache__
 /judge/__pycache__
 /config
+/backups
 coding_contest.db
 .DS_STORE
 .env
