@@ -322,6 +322,7 @@ tr.me td { background: var(--me-bg); }
 /* ---------- segmented tabs (admin) ---------- */
 .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; align-items: start; max-width: 1000px; }
 .admin-grid .panel + .panel { margin-top: 0; }
+.reveal-code { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; letter-spacing: .06em; margin: .35rem 0; user-select: all; overflow-wrap: anywhere; }
 .segmented { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px; gap: 2px; margin-bottom: 1rem; }
 .segmented a { padding: .4rem .9rem; border-radius: 6px; color: var(--text-2); font-weight: 600; }
 .segmented a:hover { text-decoration: none; color: var(--text); }

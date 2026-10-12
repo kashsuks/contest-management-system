@@ -130,7 +130,8 @@ async function api(path, options) {
     // An expired session redirects to the login page (HTML), so send the user back there
     if (response.redirected && new URL(response.url).pathname === '/login') {
         window.location.href = '/login';
-        throw new Error('Signed out');
+        // Callers treat this like any failed request; the page is about to be replaced by the login page
+        return { ok: false, status: 401, data: null, text: '' };
     }
     return { ok: response.ok, status: response.status, data, text };
 }
@@ -154,6 +155,16 @@ function setBusy(button, busy, busyLabel) {
         button.disabled = false;
         if (button.dataset.label !== undefined) button.innerHTML = button.dataset.label;
     }
+}
+
+/** Offer a Blob to the user as a file download. */
+function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = el('a', { href: url, download: filename });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 // ---------------------------------------------------------------- state
@@ -655,6 +666,8 @@ function renderAdminProblems() {
                 el('a', { class: 'btn btn-quiet btn-sm', href: `#/problems/${Number(problem.id)}`, text: 'View' }),
                 el('button', { type: 'button', class: 'btn btn-quiet btn-sm', text: 'Edit',
                     onclick: () => window.open(`/problem_creation.html?edit=${Number(problem.id)}`, '_blank') }),
+                el('button', { type: 'button', class: 'btn btn-quiet btn-sm', text: 'Rejudge',
+                    onclick: () => rejudgeProblem(problem) }),
                 el('button', { type: 'button', class: 'btn btn-danger btn-sm', text: 'Delete',
                     onclick: () => deleteProblem(problem) }))))));
 }
@@ -712,6 +725,7 @@ function wireAdmin() {
             if (result.ok) {
                 toast(`Account "${$('#newUsername').value.trim()}" created.`, 'success');
                 event.target.reset();
+                loadUserList();
                 loadLeaderboard();
             } else {
                 showFormError('#createUserError', friendlyError(result));
@@ -764,6 +778,7 @@ function wireAdmin() {
                 `${response.headers.get('X-First-Username')} to ${response.headers.get('X-Last-Username')}.`;
             $('#bulkResult').hidden = false;
             toast('Accounts created. The PDF has been downloaded.', 'success');
+            loadUserList();
             loadLeaderboard();
         } catch (error) {
             showFormError('#bulkError', 'Could not reach the server.');
@@ -799,6 +814,253 @@ function wireAdmin() {
     });
 }
 
+// ---------------------------------------------------------------- admin: accounts
+let adminUsers = [];
+let resetCredentials = null;
+
+async function loadUserList() {
+    const result = await api('/admin/users');
+    if (!result.ok) return;
+    adminUsers = result.data;
+    renderUserList();
+}
+
+function renderUserList() {
+    const query = $('#userSearch').value.trim().toLowerCase();
+    const shown = adminUsers.filter(user => !query || user.username.toLowerCase().includes(query));
+    $('#userCount').textContent = adminUsers.length ? `(${adminUsers.length})` : '';
+    $('#usersEmpty').hidden = shown.length > 0;
+    $('#userTable').hidden = shown.length === 0;
+    $('#userList').replaceChildren(...shown.map(user => el('tr', {},
+        el('td', { text: user.username }),
+        el('td', { class: 'muted', text: user.email }),
+        el('td', {}, el('span', { class: `chip ${user.disabled ? 'wa' : 'ac'}`, text: user.disabled ? 'Disabled' : 'Active' })),
+        el('td', { class: 'num', text: user.submission_count }),
+        el('td', { class: 'num' }, el('div', { class: 'd-inline-flex gap-1' },
+            el('button', { type: 'button', class: 'btn btn-quiet btn-sm', text: 'Reset password', onclick: () => resetPassword(user) }),
+            el('button', { type: 'button', class: 'btn btn-quiet btn-sm', text: user.disabled ? 'Enable' : 'Disable',
+                onclick: () => setUserDisabled(user, !user.disabled) }),
+            el('button', { type: 'button', class: 'btn btn-danger btn-sm', text: 'Delete', onclick: () => deleteUser(user) }))))));
+}
+
+async function resetPassword(user) {
+    if (!confirm(`Give ${user.username} a new password? The old one stops working and they are signed out.`)) return;
+    const result = await api(`/admin/users/${user.id}/reset_password`, { method: 'POST' });
+    if (!result.ok) {
+        toast(friendlyError(result), 'error');
+        return;
+    }
+    resetCredentials = result.data;
+    $('#resetUser').textContent = result.data.username;
+    $('#resetPassword').textContent = result.data.password;
+    $('#resetResult').hidden = false;
+    $('#resetResult').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+async function setUserDisabled(user, disabled) {
+    if (disabled && !confirm(`Disable ${user.username}? They are signed out and cannot log in until you enable the account again.`)) return;
+    const result = await postJson(`/admin/users/${user.id}/disabled`, { disabled });
+    if (result.ok) {
+        toast(`${user.username} ${disabled ? 'disabled' : 'enabled'}.`, 'success');
+        loadUserList();
+        loadLeaderboard();
+    } else {
+        toast(friendlyError(result), 'error');
+    }
+}
+
+async function deleteUser(user) {
+    const count = user.submission_count;
+    const warning = count
+        ? `Delete ${user.username} and their ${count} submission${count === 1 ? '' : 's'}? This cannot be undone.`
+        : `Delete ${user.username}? This cannot be undone.`;
+    if (!confirm(warning)) return;
+    const result = await api(`/admin/users/${user.id}`, { method: 'DELETE' });
+    if (result.ok) {
+        toast(`${user.username} deleted.`, 'success');
+        loadUserList();
+        loadLeaderboard();
+    } else {
+        toast(friendlyError(result), 'error');
+    }
+}
+
+function wireAccounts() {
+    $('#userSearch').addEventListener('input', renderUserList);
+    $('#resetDismiss').addEventListener('click', () => {
+        resetCredentials = null;
+        $('#resetPassword').textContent = '';
+        $('#resetResult').hidden = true;
+    });
+    $('#resetCopy').addEventListener('click', async event => {
+        try {
+            await copyText(resetCredentials.password);
+            event.target.textContent = 'Copied';
+        } catch (e) {
+            toast('Could not copy. Select the password and copy it manually.', 'error');
+        }
+        setTimeout(() => { event.target.textContent = 'Copy'; }, 1500);
+    });
+    $('#resetSlip').addEventListener('click', async () => {
+        const response = await fetch('/admin/slip_pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(resetCredentials),
+        });
+        if (response.ok) saveBlob(await response.blob(), `login-${resetCredentials.username}.pdf`);
+        else toast('Could not create the PDF.', 'error');
+    });
+}
+
+// ---------------------------------------------------------------- admin: rejudge
+let rejudgeTimer = null;
+let rejudgeWasRunning = false;
+
+async function pollRejudge() {
+    clearTimeout(rejudgeTimer);
+    const result = await api('/admin/rejudge_status');
+    if (!result.ok) return;
+    const job = result.data;
+    const box = $('#rejudgeStatus');
+    if (job.running) {
+        rejudgeWasRunning = true;
+        box.hidden = false;
+        $('#rejudgeStatusText').textContent = `Rejudging "${job.title}": ${job.done + job.failed} of ${job.total} done...`;
+        rejudgeTimer = setTimeout(pollRejudge, 1500);
+        return;
+    }
+    box.hidden = true;
+    if (rejudgeWasRunning) {
+        rejudgeWasRunning = false;
+        const summary = `Rejudge of "${job.title}" finished: ${job.done} rejudged` + (job.failed ? `, ${job.failed} failed` : '') + '.';
+        toast(job.error ? `${summary} ${job.error}` : summary, job.error || job.failed ? 'error' : 'success', 8000);
+        loadProblems();
+        loadLeaderboard();
+    }
+}
+
+async function rejudgeProblem(problem) {
+    const count = problem.submission_count || 0;
+    if (!count) {
+        toast('There are no submissions for this problem yet.', 'info');
+        return;
+    }
+    if (!confirm(`Rejudge all ${count} submission${count === 1 ? '' : 's'} for "${problem.title}" using its current tests? Scores and the leaderboard can change.`)) return;
+    const result = await api(`/admin/problem/${problem.id}/rejudge`, { method: 'POST' });
+    if (result.ok) pollRejudge();
+    else toast(friendlyError(result), 'error');
+}
+
+// ---------------------------------------------------------------- admin: submissions
+const adminSubs = { items: [], total: 0 };
+
+function adminSubsQuery(offset) {
+    const params = new URLSearchParams({ limit: '50', offset: String(offset) });
+    const problem = $('#filterProblem').value, user = $('#filterUser').value.trim(), status = $('#filterStatus').value;
+    if (problem) params.set('problem_id', problem);
+    if (user) params.set('username', user);
+    if (status) params.set('status', status);
+    return params;
+}
+
+function fillProblemFilter() {
+    const select = $('#filterProblem');
+    const chosen = select.value;
+    select.replaceChildren(el('option', { value: '', text: 'All problems' }),
+        ...state.problems.map(p => el('option', { value: p.id, text: `${p.shortname}. ${p.title}` })));
+    select.value = chosen;
+}
+
+async function loadAdminSubmissions(reset = true) {
+    if (reset) adminSubs.items = [];
+    fillProblemFilter();
+    const result = await api(`/admin/submissions?${adminSubsQuery(adminSubs.items.length)}`);
+    if (!result.ok) return;
+    adminSubs.items.push(...result.data.items);
+    adminSubs.total = result.data.total;
+    renderAdminSubmissions();
+}
+
+function renderAdminSubmissions() {
+    $('#adminSubsTotal').textContent = adminSubs.total ? `(${adminSubs.total})` : '';
+    $('#adminSubsEmpty').hidden = adminSubs.items.length > 0;
+    $('#adminSubsTable').hidden = adminSubs.items.length === 0;
+    $('#adminSubsMore').hidden = adminSubs.items.length >= adminSubs.total;
+    $('#adminSubsList').replaceChildren(...adminSubs.items.map(s => el('tr',
+        { class: 'clickable', onclick: event => { if (!event.target.closest('a')) location.hash = `#/admin/submissions/${s.id}`; } },
+        el('td', {}, el('a', { href: `#/admin/submissions/${s.id}`, text: String(s.id) })),
+        el('td', { text: s.username }),
+        el('td', { text: `${s.problem.shortname}. ${s.problem.title}` }),
+        el('td', { text: { python: 'Python', cpp: 'C++', java: 'Java' }[s.language] || s.language }),
+        el('td', {}, chip(s.status === 'AC' && s.points_earned < s.problem.total_points ? 'PARTIAL' : s.status)),
+        el('td', { class: 'num', text: `${s.points_earned} / ${s.problem.total_points}` }),
+        el('td', { class: 'num', text: fmtMs(s.execution_time) }),
+        el('td', { class: 'muted', text: fmtWhen(s.submitted_at) }))));
+}
+
+async function showAdminSubmission(id, token) {
+    const result = await api(`/admin/submission/${id}`);
+    if (token !== routeToken) return;
+    if (!result.ok) {
+        toast('Could not open that submission.', 'error');
+        location.hash = '#/admin/submissions';
+        return;
+    }
+
+    const s = result.data;
+    const verdict = verdictFor(s.points_earned, s.problem.total_points, s.batch_results);
+    const host = el('div', { class: 'code-readonly' });
+    const rejudgeButton = el('button', { type: 'button', class: 'btn btn-primary btn-sm', text: 'Rejudge' });
+    rejudgeButton.addEventListener('click', async () => {
+        setBusy(rejudgeButton, true, 'Rejudging...');
+        const response = await api(`/admin/submission/${s.id}/rejudge`, { method: 'POST' });
+        if (response.ok) {
+            toast(`Rejudged: ${response.data.points_earned} / ${response.data.problem.total_points} points.`, 'success');
+            showAdminSubmission(id, routeToken);
+        } else {
+            toast(friendlyError(response), 'error');
+            setBusy(rejudgeButton, false);
+        }
+    });
+
+    $('#adminSubmissionDetail').replaceChildren(
+        el('div', { class: 'page-head' },
+            el('div', {},
+                el('h1', { text: `Submission #${s.id}` }),
+                el('p', { class: 'sub', text: `${s.username} · ${s.problem.shortname}. ${s.problem.title} · ${fmtWhen(s.submitted_at)}` })),
+            rejudgeButton),
+        el('div', { class: 'panel' }, el('div', { class: 'panel-body' },
+            el('div', { class: 'result-head' },
+                el('span', { class: `verdict ${verdict.cls}`, text: s.status === 'ERROR' ? 'Judge error' : verdict.label }),
+                el('div', { class: 'stat-row' },
+                    el('span', {}, 'Score ', el('b', { text: `${s.points_earned} / ${s.problem.total_points}` })),
+                    el('span', {}, 'Language ', el('b', { text: { python: 'Python', cpp: 'C++', java: 'Java' }[s.language] || s.language })),
+                    s.execution_time ? el('span', {}, 'Time ', el('b', { text: fmtMs(s.execution_time) })) : null,
+                    s.memory_used ? el('span', {}, 'Memory ', el('b', { text: fmtKb(s.memory_used) })) : null)),
+            renderBatches(s.batch_results || []))),
+        el('div', { class: 'panel' },
+            el('div', { class: 'panel-head', text: 'Submitted code' }),
+            host));
+
+    const editorView = CodeMirror(host, {
+        value: s.code,
+        mode: CM_MODES[s.language] || 'text/plain',
+        theme: 'contest',
+        readOnly: true,
+        lineNumbers: true,
+        viewportMargin: Infinity,
+    });
+    requestAnimationFrame(() => editorView.refresh());
+}
+
+function wireAdminSubmissions() {
+    $('#adminSubsFilter').addEventListener('submit', event => {
+        event.preventDefault();
+        loadAdminSubmissions(true);
+    });
+    $('#adminSubsMoreBtn').addEventListener('click', () => loadAdminSubmissions(false));
+}
+
 // ---------------------------------------------------------------- router
 function showView(name) {
     $$('[data-view]').forEach(section => { section.hidden = section.dataset.view !== name; });
@@ -806,7 +1068,7 @@ function showView(name) {
 
 async function route() {
     const token = ++routeToken;
-    const [section = 'problems', arg] = (location.hash.replace(/^#\/?/, '') || 'problems').split('/');
+    const [section = 'problems', arg, arg2] = (location.hash.replace(/^#\/?/, '') || 'problems').split('/');
     $$('[data-nav]').forEach(link => link.classList.toggle('active', link.dataset.nav === section));
     window.scrollTo(0, 0);
 
@@ -826,12 +1088,20 @@ async function route() {
         loadLeaderboard();
     } else if (section === 'admin') {
         if (!state.isAdmin) { location.hash = '#/problems'; return; }
-        const tab = ['users', 'problems', 'settings'].includes(arg) ? arg : 'users';
+        const tab = ['users', 'problems', 'submissions', 'settings'].includes(arg) ? arg : 'users';
+        const detailId = tab === 'submissions' && /^\d+$/.test(arg2 || '') ? Number(arg2) : null;
         showView('admin');
         setTitle('Admin');
         $$('[data-admin-tab]').forEach(link => link.classList.toggle('active', link.dataset.adminTab === tab));
-        $$('[data-admin-panel]').forEach(panel => { panel.hidden = panel.dataset.adminPanel !== tab; });
+        const visiblePanel = detailId ? 'submission' : tab;
+        $$('[data-admin-panel]').forEach(panel => { panel.hidden = panel.dataset.adminPanel !== visiblePanel; });
+        if (tab === 'users') loadUserList();
+        if (tab === 'problems') { loadProblems(); pollRejudge(); }
         if (tab === 'settings') loadSettings();
+        if (tab === 'submissions') {
+            if (detailId) await showAdminSubmission(detailId, token);
+            else loadAdminSubmissions(true);
+        }
     } else {
         showView('problems');
         setTitle('Problems');
@@ -889,6 +1159,8 @@ function clearSavedData() {
 async function init() {
     wireProblemPage();
     wireAdmin();
+    wireAccounts();
+    wireAdminSubmissions();
     $('form[action="/logout"]').addEventListener('submit', clearSavedData);
 
     const [name, admin] = await Promise.all([api('/username'), api('/check_admin')]);

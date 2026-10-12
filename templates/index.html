@@ -8,7 +8,7 @@
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='vendor/codemirror/codemirror.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FFA116'/%3E%3Ctext x='16' y='21' font-family='monospace' font-size='14' font-weight='700' text-anchor='middle' fill='%231A1A1A'%3E%26lt;/%26gt;%3C/text%3E%3C/svg%3E">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/dompurify/purify.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/socket.io/socket.io.js') }}"></script>
@@ -191,6 +191,7 @@
             <div class="segmented" role="tablist" aria-label="Admin sections">
                 <a href="#/admin/users" data-admin-tab="users">Users</a>
                 <a href="#/admin/problems" data-admin-tab="problems">Problems</a>
+                <a href="#/admin/submissions" data-admin-tab="submissions">Submissions</a>
                 <a href="#/admin/settings" data-admin-tab="settings">Settings</a>
             </div>
 
@@ -249,9 +250,45 @@
                     </div>
                 </div>
                 </div>
+
+                <div class="panel mt-3" style="max-width: 1000px;">
+                    <div class="panel-head">
+                        <span>Accounts <span class="text-secondary" id="userCount"></span></span>
+                        <input type="search" class="form-control form-control-sm" id="userSearch" placeholder="Search username" aria-label="Search accounts" style="max-width: 220px;">
+                    </div>
+                    <div class="banner m-3" id="resetResult" hidden>
+                        <span aria-hidden="true">&#128273;</span>
+                        <div>
+                            <div>New password for <strong id="resetUser"></strong>:</div>
+                            <div class="reveal-code" id="resetPassword"></div>
+                            <div class="text-secondary">It cannot be shown again, and they have been signed out. Give it to them now.</div>
+                            <div class="d-flex gap-2 mt-2 flex-wrap">
+                                <button type="button" class="btn btn-secondary btn-sm" id="resetCopy">Copy</button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="resetSlip">Download slip (PDF)</button>
+                                <button type="button" class="btn btn-quiet btn-sm" id="resetDismiss">Dismiss</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table" id="userTable">
+                            <thead>
+                                <tr><th>Username</th><th>Email</th><th>Status</th><th class="num">Submissions</th><th></th></tr>
+                            </thead>
+                            <tbody id="userList"></tbody>
+                        </table>
+                    </div>
+                    <div class="empty" id="usersEmpty" hidden>
+                        <h3>No accounts</h3>
+                        <p>Create accounts above, one at a time or in bulk.</p>
+                    </div>
+                </div>
             </div>
 
             <div data-admin-panel="problems" hidden>
+                <div class="banner mb-3" id="rejudgeStatus" hidden role="status">
+                    <span aria-hidden="true">&#9881;&#65039;</span>
+                    <div id="rejudgeStatusText"></div>
+                </div>
                 <div class="panel">
                     <div class="panel-head">
                         <span>Problems</span>
@@ -270,6 +307,47 @@
                         <p>Create the first problem to get the contest started.</p>
                     </div>
                 </div>
+            </div>
+
+            <div data-admin-panel="submissions" hidden>
+                <div class="panel">
+                    <div class="panel-head">
+                        <span>All submissions <span class="text-secondary" id="adminSubsTotal"></span></span>
+                        <form class="d-flex gap-2 flex-wrap" id="adminSubsFilter">
+                            <select class="form-select form-select-sm" id="filterProblem" aria-label="Problem" style="width: auto;">
+                                <option value="">All problems</option>
+                            </select>
+                            <input type="search" class="form-control form-control-sm" id="filterUser" placeholder="Username" aria-label="Username" style="width: 150px;">
+                            <select class="form-select form-select-sm" id="filterStatus" aria-label="Result" style="width: auto;">
+                                <option value="">Any result</option>
+                                <option value="AC">Scored points (AC)</option>
+                                <option value="WA">No points (WA)</option>
+                                <option value="ERROR">Judge error</option>
+                            </select>
+                            <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+                        </form>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="data-table" id="adminSubsTable">
+                            <thead>
+                                <tr><th>#</th><th>User</th><th>Problem</th><th>Language</th><th>Result</th><th class="num">Score</th><th class="num">Time</th><th>Submitted</th></tr>
+                            </thead>
+                            <tbody id="adminSubsList"></tbody>
+                        </table>
+                    </div>
+                    <div class="empty" id="adminSubsEmpty" hidden>
+                        <h3>No submissions found</h3>
+                        <p>Nothing matches those filters yet.</p>
+                    </div>
+                    <div class="panel-body text-center" id="adminSubsMore" hidden>
+                        <button type="button" class="btn btn-secondary btn-sm" id="adminSubsMoreBtn">Load more</button>
+                    </div>
+                </div>
+            </div>
+
+            <div data-admin-panel="submission" hidden>
+                <a class="back-link" href="#/admin/submissions">&larr; All submissions</a>
+                <div id="adminSubmissionDetail"></div>
             </div>
 
             <div data-admin-panel="settings" hidden>
@@ -297,6 +375,17 @@
                             </div>
                             <button type="submit" class="btn btn-primary mt-3" id="saveSettingsButton">Save settings</button>
                         </form>
+                    </div>
+                </div>
+
+                <div class="panel mt-3" style="max-width: 560px;">
+                    <div class="panel-head">Export results</div>
+                    <div class="panel-body">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a class="btn btn-secondary" href="/admin/export/standings.csv" download>Standings (CSV)</a>
+                            <a class="btn btn-secondary" href="/admin/export/submissions.csv" download>All submissions (CSV)</a>
+                        </div>
+                        <div class="form-text mt-2">Standings are the real final result and ignore a leaderboard freeze. Submitted code is not included.</div>
                     </div>
                 </div>
             </div>
