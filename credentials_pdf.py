@@ -1,8 +1,8 @@
 """Printable sheet of login slips, one per account, to be cut apart and handed out."""
 from fpdf import FPDF
 
-PAGE_FORMAT = 'Letter'  # 215.9 x 279.4 mm
-PAGE_WIDTH, PAGE_HEIGHT = 215.9, 279.4
+PAGE_FORMAT = 'A4'  # 210 x 297 mm
+PAGE_WIDTH, PAGE_HEIGHT = 210, 297
 MARGIN = 12
 HEADER_HEIGHT = 20
 SLIP_HEIGHT = 24
