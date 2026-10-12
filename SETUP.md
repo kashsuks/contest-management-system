@@ -64,7 +64,25 @@ Admin -> Users has two forms:
 - **Create a contestant account** for a single user.
 - **Create accounts in bulk**: enter how many accounts you need (1-200) and a username prefix (default `User`). The accounts are created as `User1`, `User2`, ... (continuing after any that already exist) with random passwords, and a PDF is downloaded with one slip per account (`Username:` / `Password:`), ten to an A4 page, ready to print and cut up.
 
-Passwords are stored hashed, so the PDF is the only place they can be read. Keep it safe, print it, then delete it (the page also offers "Download PDF again" until you leave it). If a password is lost, create a new account.
+Passwords are stored hashed, so the PDF is the only place they can be read. Keep it safe, print it, then delete it (the page also offers "Download PDF again" until you leave it).
+
+The **Accounts** list below the forms lets you search accounts and:
+- **Reset password**: gives the contestant a new random password, shown once (with a one-slip PDF to print). Their old password stops working and they are signed out immediately. Use this when a slip is lost.
+- **Disable / Enable**: a disabled account is signed out at once, cannot log in, and is hidden from the leaderboard.
+- **Delete**: removes the account and all of its submissions.
+
+### Problems
+
+Admin -> Problems lists every problem with its submission count:
+- **Edit** opens the problem form filled in (the label A, B, ... never changes). Contestants who have the problem open see the update live.
+- **Delete** removes the problem *and its submissions*.
+- **Rejudge** re-runs every submission for that problem against its current tests, in the background with a progress banner. Use it after fixing a wrong test case. Existing results are not changed until you rejudge.
+- Test cases can be uploaded as a `.zip` of `input001.txt` / `output001.txt`, `input002.txt` / `output002.txt`, ... in each batch.
+
+### Submissions and results
+
+- **Admin -> Submissions** lists everyone's submissions (filter by problem, username or result). Open one to read the code and per-test results, and to rejudge it. Submissions that failed during a judge outage show as "Judge error" and can be rejudged.
+- **Admin -> Settings -> Export results** downloads the final standings (ignores a leaderboard freeze) and all submissions as CSV (no code).
 
 ## Judge System Setup
 
@@ -75,7 +93,9 @@ Contestant code is compiled and run inside a throwaway Docker container (no netw
 ```bash
 docker build -t cms-judge judge/
 ```
-3. Start the server as usual. If Docker or the image is missing, submissions fail with a judge error; they are never run unsandboxed.
+3. Start the server as usual. It checks the judge on startup and prints `Judge OK` or a warning. If Docker or the image is missing, submissions fail with a clear "judge unavailable" message and are never run unsandboxed; admins see a red banner with the fix while the problem lasts, and failed submissions can be rejudged afterwards.
+
+Output is compared ignoring whitespace at the end of each line and blank lines at the start and end of the output.
 
 Environment variables:
 - `JUDGE_IMAGE` - image name (default `cms-judge`)
@@ -91,6 +111,15 @@ The server listens on all interfaces (`HOST`/`PORT` environment variables, defau
 - All front-end libraries are served from `static/vendor/`, so no internet access is needed during the contest (see `static/vendor/README.md` for versions).
 - The site uses plain HTTP, so don't let contestants reuse real passwords.
 - Keep the machine plugged in and disable sleep.
+
+## Running the tests
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The tests use a temporary database and the judge's local mode, so they need neither Docker nor your contest data.
 
 ## Security Considerations
 

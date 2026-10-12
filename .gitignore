@@ -6,3 +6,6 @@
 coding_contest.db
 .DS_STORE
 .env
+__pycache__/
+*.pyc
+.pytest_cache/

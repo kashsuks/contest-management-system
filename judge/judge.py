@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from typing import Dict, Any, List
 
@@ -25,6 +26,49 @@ class JudgeError(Exception):
     """The judge itself (not the submission) failed, e.g. Docker is unavailable."""
 
 
+HEALTH_CACHE_SECONDS = 20
+_health_cache = {'at': 0.0, 'result': None}
+
+
+def _check_judge_uncached() -> Dict[str, Any]:
+    if SANDBOX == 'local':
+        return {'ok': True, 'warning': True, 'sandbox': 'local',
+                'message': 'Running in local development mode: submissions are NOT sandboxed.'}
+    if SANDBOX != 'docker':
+        return {'ok': False, 'sandbox': SANDBOX, 'message': f"Unknown JUDGE_SANDBOX '{SANDBOX}' (expected 'docker' or 'local')."}
+
+    try:
+        daemon = subprocess.run(['docker', 'version', '--format', '{{.Server.Version}}'],
+                                capture_output=True, text=True, timeout=15)
+    except FileNotFoundError:
+        return {'ok': False, 'sandbox': 'docker', 'message': 'Docker is not installed on the server.'}
+    except subprocess.TimeoutExpired:
+        return {'ok': False, 'sandbox': 'docker', 'message': 'Docker is not responding.'}
+    if daemon.returncode != 0:
+        return {'ok': False, 'sandbox': 'docker', 'message': 'Docker is installed but not running. Start Docker on the server.'}
+
+    # End-to-end check: actually run a trivial program through the sandbox. (Asking Docker whether the image
+    # exists is not reliable on every setup, while running it always tells the truth, including a missing
+    # image, which comes back as a JudgeError that says how to build it.)
+    try:
+        result = judge_submission('print(1)', 'python', [{'points': 1, 'test_cases': [{'input': '', 'output': '1'}]}], 5000, 64)
+    except JudgeError as e:
+        return {'ok': False, 'sandbox': 'docker', 'message': str(e)}
+    if result['batch_results'][0]['status'] != 'AC':
+        return {'ok': False, 'sandbox': 'docker', 'message': 'The sandbox test run did not produce the expected output.'}
+    return {'ok': True, 'sandbox': 'docker', 'message': 'The judge is working.'}
+
+
+def check_judge(force: bool = False) -> Dict[str, Any]:
+    """Is the judge able to run submissions? Result is cached briefly so polling stays cheap."""
+    now = time.monotonic()
+    if not force and _health_cache['result'] is not None and now - _health_cache['at'] < HEALTH_CACHE_SECONDS:
+        return _health_cache['result']
+    result = _check_judge_uncached()
+    _health_cache.update(at=now, result=result)
+    return result
+
+
 def _sandboxed_command(workdir: str, runner_args: List[str], writable: bool, memory_mb: int, name: str) -> List[str]:
     """Build the full command line that executes runner.py with the given arguments."""
     if SANDBOX == 'local':
@@ -33,6 +77,7 @@ def _sandboxed_command(workdir: str, runner_args: List[str], writable: bool, mem
     return [
         'docker', 'run', '--rm', '-i', '--name', name,
         '--network', 'none',
+        '--pull', 'never',  # a missing judge image must fail fast, never be downloaded from a registry
         '--read-only', '--tmpfs', '/tmp:rw,exec,size=128m',
         '--memory', f'{memory_mb}m', '--memory-swap', f'{memory_mb}m',
         '--pids-limit', '64', '--cpus', '1',
@@ -78,8 +123,10 @@ def _execute(workdir: str, command: List[str], stdin: str, time_limit_ms: int, m
             return {'timed_out': False, 'returncode': -9, 'stdout': '', 'stderr': '', 'time_ms': 0,
                     'memory_kb': memory_limit_mb * 1024 + 1}
         if completed.returncode in (125, 126, 127):
+            if 'No such image' in completed.stderr or 'Unable to find image' in completed.stderr:
+                raise JudgeError(f"The judge image '{DOCKER_IMAGE}' is missing. Build it with: docker build -t {DOCKER_IMAGE} judge/")
             raise JudgeError(f'Docker could not run the judge image "{DOCKER_IMAGE}": {completed.stderr.strip()[-300:]}'
-                             ' (build it with: docker build -t cms-judge judge/)')
+                             f' (build it with: docker build -t {DOCKER_IMAGE} judge/)')
 
     try:
         return json.loads(completed.stdout)
@@ -124,6 +171,16 @@ def prepare(code: str, language: str, workdir: str, memory_limit: int) -> Dict[s
     return {'command': run_command}
 
 
+def normalize_output(text: str) -> str:
+    """Compare-friendly form of program output.
+
+    Line endings are unified and whitespace at the end of each line, plus blank lines at the start and end
+    of the output, is ignored, as on most judges. Whitespace *inside* a line still matters.
+    """
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    return '\n'.join(line.rstrip() for line in lines).strip()
+
+
 def run_test_case(workdir: str, command: List[str], test_case: Dict[str, str], time_limit: int,
                   memory_limit: int) -> Dict[str, Any]:
     """Run the prepared program against one test case and return the result."""
@@ -147,8 +204,8 @@ def run_test_case(workdir: str, command: List[str], test_case: Dict[str, str], t
             'memory_used': memory_used
         }
 
-    expected_output = test_case['output'].strip()
-    actual_output = report['stdout'].strip()
+    expected_output = normalize_output(test_case['output'])
+    actual_output = normalize_output(report['stdout'])
 
     if actual_output == expected_output:
         return {'status': 'AC', 'execution_time': execution_time, 'memory_used': memory_used}

@@ -1,19 +1,24 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, send_from_directory
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO
+import csv
+import hashlib
+import hmac
+import io
 import json
 import os
 import re
 import secrets
+import threading
 from datetime import datetime
 import pytz
 from urllib.parse import urlparse
-from judge.judge import judge_submission
+from judge.judge import judge_submission, check_judge, JudgeError
 from credentials_pdf import build_credentials_pdf
-from sqlalchemy import select, func
+from sqlalchemy import select, func, inspect as sa_inspect, text
 from sqlalchemy.exc import IntegrityError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -38,7 +43,7 @@ if not secret_key:
         "python -c \"import secrets; print(secrets.token_hex(32))\""
     )
 app.config['SECRET_KEY'] = secret_key
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///coding_contest.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///coding_contest.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # reject request bodies over 5 MB
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -104,10 +109,17 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128))
     is_admin = db.Column(db.Boolean, default=False)
+    disabled = db.Column(db.Boolean, nullable=False, default=False)
     submissions = db.relationship('Submission', backref='user', lazy=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+
+    def get_id(self):
+        # The session id includes a fingerprint of the password hash, so resetting a password signs out
+        # every session that was opened with the old one
+        fingerprint = hashlib.sha256((self.password_hash or '').encode()).hexdigest()[:16]
+        return f'{self.id}.{fingerprint}'
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
@@ -139,9 +151,26 @@ class Submission(db.Model):
     submitted_while_frozen = db.Column(db.Boolean, nullable=False, default=False)
 
 @login_manager.user_loader
-def load_user(user_id):
-    stmt = select(User).where(User.id == int(user_id))
-    return db.session.execute(stmt).scalar_one_or_none()
+def load_user(session_id):
+    try:
+        user_id, fingerprint = session_id.split('.', 1)
+        user = db.session.get(User, int(user_id))
+    except (ValueError, AttributeError):
+        return None  # a cookie from before sessions carried a fingerprint, or a malformed one
+    if user is None or user.disabled or not hmac.compare_digest(fingerprint, user.get_id().split('.', 1)[1]):
+        return None
+    return user
+
+def ensure_schema():
+    """Add columns introduced after a database was first created (create_all() never alters existing tables)."""
+    with db.engine.connect() as connection:  # a fresh inspector, so it never reports stale column lists
+        columns = {column['name'] for column in sa_inspect(connection).get_columns('user')}
+    if 'disabled' not in columns:
+        db.session.execute(text('ALTER TABLE "user" ADD COLUMN disabled BOOLEAN NOT NULL DEFAULT 0'))
+        db.session.commit()
+
+def generate_password():
+    return ''.join(secrets.choice(PASSWORD_ALPHABET) for _ in range(GENERATED_PASSWORD_LENGTH))
 
 MIN_PASSWORD_LENGTH = 8
 
@@ -167,7 +196,7 @@ def init_admin():
 def reject_cross_origin_posts():
     # Browsers always send Origin on cross-site POSTs; refuse any that don't come from this host
     origin = request.headers.get('Origin')
-    if request.method == 'POST' and origin and urlparse(origin).netloc != request.host:
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and origin and urlparse(origin).netloc != request.host:
         return jsonify({'error': 'Cross-origin request blocked'}), 403
 
 def require_json_fields(*fields):
@@ -185,6 +214,15 @@ def require_json_fields(*fields):
             return view(*args, **kwargs)
         return wrapper
     return decorator
+
+def next_shortname():
+    """The first free label (A, B, ... Z, AA, ...). Labels of existing problems never change, so deleting B
+    leaves a gap that the next new problem fills rather than colliding with C."""
+    used = {name for (name,) in db.session.query(Problem.shortname).all()}
+    index = 0
+    while shortname_for(index) in used:
+        index += 1
+    return shortname_for(index)
 
 def shortname_for(index):
     """0 -> A, 25 -> Z, 26 -> AA, ..."""
@@ -238,6 +276,11 @@ def validate_problem(data):
     return None
 
 # Routes
+@app.route('/favicon.ico')
+def favicon():
+    # Browsers ask for this path by default, whatever the page's <link rel="icon"> says
+    return send_from_directory(app.static_folder, 'favicon.svg', mimetype='image/svg+xml', max_age=86400)
+
 @app.route('/')
 def index():
     if not current_user.is_authenticated:
@@ -257,6 +300,8 @@ def login():
         user = User.query.filter_by(username=data['username']).first()
         
         if user and user.check_password(data['password']):
+            if user.disabled:
+                return jsonify({'error': 'This account has been disabled. Please see an organiser.'}), 403
             login_user(user)
             return jsonify({'message': 'Login successful'}), 200
         
@@ -343,7 +388,7 @@ def create_users_batch():
     try:
         accounts = []
         for username in usernames:
-            password = ''.join(secrets.choice(PASSWORD_ALPHABET) for _ in range(GENERATED_PASSWORD_LENGTH))
+            password = generate_password()
             user = User(username=username, email=f'{username.lower()}@contest.invalid')
             user.set_password(password)
             db.session.add(user)
@@ -385,13 +430,9 @@ def create_problem():
         if error:
             return jsonify({'error': error}), 400
 
-        # Generate shortname based on problem count
-        problem_count = Problem.query.count()
-        shortname = shortname_for(problem_count)  # A, B, ..., Z, AA, ...
-        
         problem = Problem(
             title=data['title'].strip(),
-            shortname=shortname,
+            shortname=next_shortname(),
             description=data['description'],
             difficulty=data['difficulty'],
             time_limit=data['time_limit'],
@@ -422,20 +463,29 @@ def create_problem():
 @login_required
 def get_problems():
     problems = Problem.query.order_by(Problem.created_at.desc()).all()
-    return jsonify([{
-        'id': p.id,
-        'title': p.title,
-        'shortname': p.shortname,
-        'difficulty': p.difficulty,
-        'time_limit': p.time_limit,
-        'memory_limit': p.memory_limit,
-        'total_points': sum(batch['points'] for batch in p.batches)
-    } for p in problems])
+    counts = {}
+    if current_user.is_admin:
+        counts = dict(db.session.query(Submission.problem_id, func.count(Submission.id)).group_by(Submission.problem_id).all())
+    items = []
+    for p in problems:
+        item = {
+            'id': p.id,
+            'title': p.title,
+            'shortname': p.shortname,
+            'difficulty': p.difficulty,
+            'time_limit': p.time_limit,
+            'memory_limit': p.memory_limit,
+            'total_points': sum(batch['points'] for batch in p.batches)
+        }
+        if current_user.is_admin:
+            item['submission_count'] = counts.get(p.id, 0)
+        items.append(item)
+    return jsonify(items)
 
 @app.route('/problem/<int:problem_id>')
 @login_required
 def get_problem(problem_id):
-    problem = Problem.query.get_or_404(problem_id)
+    problem = db.get_or_404(Problem, problem_id)
     data = {
         'id': problem.id,
         'title': problem.title,
@@ -450,6 +500,71 @@ def get_problem(problem_id):
     if current_user.is_admin:
         data['batches'] = problem.batches
     return jsonify(data)
+
+@app.route('/problem/<int:problem_id>', methods=['PUT'])
+@login_required
+def update_problem(problem_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    error = validate_problem(data)
+    if error:
+        return jsonify({'error': error}), 400
+
+    problem = db.get_or_404(Problem, problem_id)
+    problem.title = data['title'].strip()
+    problem.description = data['description']
+    problem.difficulty = data['difficulty']
+    problem.time_limit = data['time_limit']
+    problem.memory_limit = data['memory_limit']
+    problem.batches = data['batches']  # the label (A, B, ...) is kept
+    db.session.commit()
+    socketio.emit('problems_changed')
+    return jsonify({'message': 'Problem updated', 'id': problem.id})
+
+@app.route('/problem/<int:problem_id>', methods=['DELETE'])
+@login_required
+def delete_problem(problem_id):
+    """Delete a problem together with every submission made to it."""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    problem = db.get_or_404(Problem, problem_id)
+    deleted = Submission.query.filter_by(problem_id=problem.id).delete()
+    db.session.delete(problem)
+    db.session.commit()
+    socketio.emit('problems_changed')
+    socketio.emit('update_leaderboard')
+    return jsonify({'message': 'Problem deleted', 'deleted_submissions': deleted})
+
+@app.route('/judge_status')
+@login_required
+def judge_status():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    return jsonify(check_judge(force=request.args.get('refresh') == '1'))
+
+def apply_judge_result(submission, result):
+    """Store a judging result on the submission, never keeping the hidden tests' expected/actual output."""
+    for batch_result in result['batch_results']:
+        for test_case_result in batch_result['test_case_results']:
+            test_case_result.pop('expected', None)
+            test_case_result.pop('got', None)
+    submission.status = result['status']
+    submission.execution_time = result.get('execution_time')
+    submission.memory_used = result.get('memory_used')
+    submission.points_earned = result.get('points_earned', 0)
+    submission.batch_results = result['batch_results']
+
+def rejudge_submission(submission, problem):
+    """Judge the stored code again against the problem's current tests."""
+    result = judge_submission(code=submission.code, language=submission.language, batches=problem.batches,
+                              time_limit=problem.time_limit, memory_limit=problem.memory_limit)
+    apply_judge_result(submission, result)
+    db.session.commit()
+
+JUDGE_UNAVAILABLE_MESSAGE = 'The judge is temporarily unavailable. Please tell an organiser.'
 
 @app.route('/submit', methods=['POST'])
 @login_required
@@ -475,7 +590,11 @@ def submit():
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
 
-        problem = Problem.query.get_or_404(data['problem_id'])
+        if not _is_int(data['problem_id']):
+            return jsonify({'error': 'Problem ID must be a number'}), 400
+        problem = db.session.get(Problem, data['problem_id'])
+        if problem is None:
+            return jsonify({'error': 'That problem no longer exists'}), 404
         
         # Create submission record
         submission = Submission(
@@ -499,18 +618,7 @@ def submit():
                 memory_limit=problem.memory_limit
             )
             
-            # Never reveal hidden test output to the contestant
-            for batch_result in result['batch_results']:
-                for test_case_result in batch_result['test_case_results']:
-                    test_case_result.pop('expected', None)
-                    test_case_result.pop('got', None)
-
-            # Update submission record
-            submission.status = result['status']
-            submission.execution_time = result.get('execution_time')
-            submission.memory_used = result.get('memory_used')
-            submission.points_earned = result.get('points_earned', 0)
-            submission.batch_results = result['batch_results']
+            apply_judge_result(submission, result)
             result['id'] = submission.id
             
             # Emit WebSocket event for new submission - update leaderboard
@@ -519,6 +627,11 @@ def submit():
             db.session.commit()
             return jsonify(result)
             
+        except JudgeError as e:
+            app.logger.error('Judge unavailable: %s', e)
+            submission.status = 'ERROR'
+            db.session.commit()
+            return jsonify({'error': JUDGE_UNAVAILABLE_MESSAGE}), 503
         except Exception as e:
             app.logger.exception('Judge error')
             submission.status = 'ERROR'
@@ -583,6 +696,9 @@ def run_code():
             
             return jsonify(result)
             
+        except JudgeError as e:
+            app.logger.error('Judge unavailable: %s', e)
+            return jsonify({'error': JUDGE_UNAVAILABLE_MESSAGE}), 503
         except Exception as e:
             app.logger.exception('Run error')
             return jsonify({'error': 'The judge failed to run this code'}), 500
@@ -591,59 +707,48 @@ def run_code():
         app.logger.exception('Run error')
         return jsonify({'error': 'Could not run code'}), 500
 
+def build_leaderboard(frozen):
+    """Standings for every active contestant: (problems, rows sorted by total points, highest first).
+
+    Each problem counts the contestant's best accepted submission (most points, then earliest). When `frozen`
+    is true, submissions made while the board was frozen are left out.
+    """
+    users = User.query.filter_by(is_admin=False, disabled=False).order_by(User.id).all()
+    problems = Problem.query.order_by(Problem.id).all()
+
+    accepted = Submission.query.with_entities(
+        Submission.user_id, Submission.problem_id, Submission.points_earned, Submission.submitted_at
+    ).filter(Submission.status == 'AC')
+    if frozen:
+        accepted = accepted.filter(Submission.submitted_while_frozen.is_(False))
+    best = {}
+    for user_id, problem_id, points, submitted_at in accepted.order_by(
+            Submission.points_earned.desc(), Submission.submitted_at, Submission.id):
+        best.setdefault((user_id, problem_id), (points, submitted_at))  # first seen is the best
+
+    rows = []
+    for user in users:
+        row = {'username': user.username, 'total_points': 0, 'problem_points': []}
+        for problem in problems:
+            points, submitted_at = best.get((user.id, problem.id), (0, None))
+            row['problem_points'].append({
+                'points': points,
+                'submission_time': submitted_at.strftime('%H:%M:%S') if submitted_at else None
+            })
+            row['total_points'] += points
+        rows.append(row)  # contestants without submissions are listed too
+    rows.sort(key=lambda row: row['total_points'], reverse=True)
+    return problems, rows
+
 @app.route('/leaderboard')
 @login_required
 def get_leaderboard():
-    # Get all users who are not admins
-    users = User.query.filter_by(is_admin=False).all()
-    
-    # Get all problems
-    problems = Problem.query.order_by(Problem.id).all()
-    
-    # Get whether leaderboard is frozen
     is_frozen = contest_config.get('leaderboard_frozen', False)
-    
-    # Calculate points for each user
-    leaderboard_data = []
-    for user in users:
-        user_data = {
-            'username': user.username,
-            'total_points': 0,
-            'problem_points': []
-        }
-        
-        # For each problem, find the best submission
-        for problem in problems:
-            best_submission = Submission.query.filter_by(
-                user_id=user.id,
-                problem_id=problem.id,
-                status='AC'
-            )
-            if is_frozen: # Frozen leaderboard - filter out submissions made while frozen
-                best_submission = best_submission.filter_by(
-                    submitted_while_frozen=False
-                )
-            best_submission = best_submission.order_by(Submission.points_earned.desc()).order_by(Submission.submitted_at).first()
-            
-            points = best_submission.points_earned if best_submission else 0
-            submission_time = best_submission.submitted_at if best_submission else None
-            
-            user_data['problem_points'].append({
-                'points': points,
-                'submission_time': submission_time.strftime('%H:%M:%S') if submission_time else None
-            })
-            user_data['total_points'] += points
-        
-        # Add user to leaderboard even if they have no submissions
-        leaderboard_data.append(user_data)
-    
-    # Sort by total points in descending order
-    leaderboard_data.sort(key=lambda x: x['total_points'], reverse=True)
-    
+    problems, rows = build_leaderboard(is_frozen)
     return jsonify({
         'problems': [{'id': p.id, 'title': p.title, 'shortname': p.shortname} for p in problems],
-        'users': leaderboard_data,
-        'is_frozen': contest_config.get('leaderboard_frozen', False)
+        'users': rows,
+        'is_frozen': is_frozen
     })
 
 @app.route('/submission/<int:submission_id>')
@@ -742,12 +847,273 @@ def update_contest_settings():
     
     return jsonify({'message': 'Settings updated successfully'})
 
+
+# ======================================================================== admin tools
+def admin_required(view):
+    """Login required, and the user must be an admin."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not current_user.is_admin:
+            return jsonify({'error': 'Unauthorized'}), 403
+        return view(*args, **kwargs)
+    return login_required(wrapper)
+
+def _total_points_by_problem():
+    return {p.id: sum(batch['points'] for batch in p.batches) for p in Problem.query.all()}
+
+def _submission_summary(submission, username, problems, totals):
+    problem = problems.get(submission.problem_id)
+    return {
+        'id': submission.id,
+        'username': username,
+        'problem': {
+            'id': submission.problem_id,
+            'shortname': problem.shortname if problem else '?',
+            'title': problem.title if problem else '(deleted)',
+            'total_points': totals.get(submission.problem_id, 0),
+        },
+        'language': submission.language,
+        'status': submission.status,
+        'points_earned': submission.points_earned,
+        'execution_time': submission.execution_time,
+        'memory_used': submission.memory_used,
+        'submitted_at': submission.submitted_at.isoformat(),
+    }
+
+SUBMISSION_STATUSES = ('AC', 'WA', 'ERROR', 'PENDING')
+
+@app.route('/admin/submissions')
+@admin_required
+def admin_submissions():
+    """Every contestant's submissions, newest first, with optional filters and paging."""
+    limit = min(max(request.args.get('limit', 50, type=int), 1), 200)
+    offset = max(request.args.get('offset', 0, type=int), 0)
+
+    query = db.session.query(Submission, User.username).join(User, Submission.user_id == User.id)
+    problem_id = request.args.get('problem_id', type=int)
+    if problem_id:
+        query = query.filter(Submission.problem_id == problem_id)
+    username = (request.args.get('username') or '').strip()
+    if username:
+        like = username.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        query = query.filter(User.username.ilike(f'%{like}%', escape='\\'))
+    status = request.args.get('status')
+    if status in SUBMISSION_STATUSES:
+        query = query.filter(Submission.status == status)
+
+    total = query.count()
+    rows = query.order_by(Submission.id.desc()).offset(offset).limit(limit).all()
+    problems = {p.id: p for p in Problem.query.options(db.defer(Problem.batches)).all()}
+    totals = _total_points_by_problem()
+    return jsonify({
+        'total': total,
+        'items': [_submission_summary(s, name, problems, totals) for s, name in rows],
+    })
+
+@app.route('/admin/submission/<int:submission_id>')
+@admin_required
+def admin_submission(submission_id):
+    submission = db.get_or_404(Submission, submission_id)
+    problems = {p.id: p for p in Problem.query.all()}
+    summary = _submission_summary(submission, submission.user.username, problems, _total_points_by_problem())
+    summary.update(code=submission.code, batch_results=submission.batch_results)
+    return jsonify(summary)
+
+@app.route('/admin/submission/<int:submission_id>/rejudge', methods=['POST'])
+@admin_required
+def admin_rejudge_submission(submission_id):
+    submission = db.get_or_404(Submission, submission_id)
+    problem = db.session.get(Problem, submission.problem_id)
+    if problem is None:
+        return jsonify({'error': 'The problem for this submission no longer exists'}), 404
+    try:
+        rejudge_submission(submission, problem)
+    except JudgeError as e:
+        app.logger.error('Judge unavailable: %s', e)
+        db.session.rollback()
+        return jsonify({'error': 'The judge is unavailable, so this could not be rejudged'}), 503
+    socketio.emit('update_leaderboard')
+    problems = {problem.id: problem}
+    summary = _submission_summary(submission, submission.user.username, problems, _total_points_by_problem())
+    summary.update(batch_results=submission.batch_results)
+    return jsonify(summary)
+
+# Rejudging every submission of a problem can take minutes, so it runs in the background (one job at a time)
+rejudge_job = {'running': False, 'problem_id': None, 'title': '', 'total': 0, 'done': 0, 'failed': 0, 'error': None}
+rejudge_lock = threading.Lock()
+
+def _rejudge_worker(problem_id, submission_ids):
+    consecutive_outages = 0
+    with app.app_context():
+        try:
+            for submission_id in submission_ids:
+                try:
+                    submission = db.session.get(Submission, submission_id)
+                    problem = db.session.get(Problem, problem_id)
+                    if submission is None or problem is None:
+                        continue
+                    rejudge_submission(submission, problem)
+                    consecutive_outages = 0
+                    rejudge_job['done'] += 1
+                except JudgeError as e:
+                    db.session.rollback()
+                    rejudge_job['failed'] += 1
+                    consecutive_outages += 1
+                    if consecutive_outages >= 3:
+                        rejudge_job['error'] = f'Stopped: the judge is unavailable ({e})'
+                        break
+                except Exception:
+                    app.logger.exception('Rejudge failed for submission %s', submission_id)
+                    db.session.rollback()
+                    rejudge_job['failed'] += 1
+        finally:
+            db.session.remove()
+            rejudge_job['running'] = False
+            socketio.emit('update_leaderboard')
+
+@app.route('/admin/problem/<int:problem_id>/rejudge', methods=['POST'])
+@admin_required
+def admin_rejudge_problem(problem_id):
+    problem = db.get_or_404(Problem, problem_id)
+    with rejudge_lock:
+        if rejudge_job['running']:
+            return jsonify({'error': 'A rejudge is already running'}), 409
+        ids = [sid for (sid,) in db.session.query(Submission.id).filter_by(problem_id=problem.id).order_by(Submission.id)]
+        rejudge_job.update(running=True, problem_id=problem.id, title=problem.title, total=len(ids), done=0, failed=0, error=None)
+    if not ids:
+        rejudge_job['running'] = False
+        return jsonify({'message': 'There are no submissions to rejudge', 'total': 0})
+    threading.Thread(target=_rejudge_worker, args=(problem.id, ids), daemon=True).start()
+    return jsonify({'message': 'Rejudge started', 'total': len(ids)}), 202
+
+@app.route('/admin/rejudge_status')
+@admin_required
+def admin_rejudge_status():
+    return jsonify(rejudge_job)
+
+# -------------------------------------------------------------------- admin: users
+def _contestant_or_error(user_id):
+    """The contestant with this id, or a (response, status) error tuple. Admin accounts are off limits here."""
+    user = db.session.get(User, user_id)
+    if user is None:
+        return None, (jsonify({'error': 'No such user'}), 404)
+    if user.is_admin:
+        return None, (jsonify({'error': 'Admin accounts cannot be changed here (see manage.py reset-admin-password)'}), 400)
+    return user, None
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    counts = dict(db.session.query(Submission.user_id, func.count(Submission.id)).group_by(Submission.user_id).all())
+    users = User.query.filter_by(is_admin=False).order_by(User.id).all()
+    return jsonify([{
+        'id': u.id, 'username': u.username, 'email': u.email, 'disabled': u.disabled,
+        'submission_count': counts.get(u.id, 0),
+    } for u in users])
+
+@app.route('/admin/users/<int:user_id>/disabled', methods=['POST'])
+@admin_required
+def admin_set_user_disabled(user_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('disabled'), bool):
+        return jsonify({'error': '"disabled" must be true or false'}), 400
+    user, error = _contestant_or_error(user_id)
+    if error:
+        return error
+    user.disabled = data['disabled']  # existing sessions end at the next request (see load_user)
+    db.session.commit()
+    socketio.emit('update_leaderboard')
+    return jsonify({'message': 'Account disabled' if user.disabled else 'Account enabled', 'disabled': user.disabled})
+
+@app.route('/admin/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_user(user_id):
+    """Delete a contestant together with all their submissions."""
+    user, error = _contestant_or_error(user_id)
+    if error:
+        return error
+    deleted = Submission.query.filter_by(user_id=user.id).delete()
+    db.session.delete(user)
+    db.session.commit()
+    socketio.emit('update_leaderboard')
+    return jsonify({'message': 'Account deleted', 'deleted_submissions': deleted})
+
+@app.route('/admin/users/<int:user_id>/reset_password', methods=['POST'])
+@admin_required
+def admin_reset_password(user_id):
+    """Give a contestant a new random password. It is returned once and never stored in readable form."""
+    user, error = _contestant_or_error(user_id)
+    if error:
+        return error
+    password = generate_password()
+    user.set_password(password)  # also signs out the sessions opened with the old password
+    db.session.commit()
+    response = jsonify({'username': user.username, 'password': password})
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+@app.route('/admin/slip_pdf', methods=['POST'])
+@admin_required
+def admin_slip_pdf():
+    """A one-slip PDF for a freshly reset password (the same layout as the bulk sheet)."""
+    data = request.get_json(silent=True)
+    username = data.get('username') if isinstance(data, dict) else None
+    password = data.get('password') if isinstance(data, dict) else None
+    if (not isinstance(username, str) or not USERNAME_PATTERN.match(username)
+            or not isinstance(password, str) or not re.fullmatch(r'[\x21-\x7e]{1,64}', password)):
+        return jsonify({'error': 'A valid username and password are required'}), 400
+    pdf = build_credentials_pdf([(username, password)], contest_config.get('contest_name', 'Coding Contest'),
+                                request.host_url.rstrip('/'))
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="login-{username}.pdf"', 'Cache-Control': 'no-store'})
+
+# ------------------------------------------------------------------- admin: CSV export
+def _csv_safe(value):
+    """Stop spreadsheet programs from running a cell as a formula (CSV injection)."""
+    text_value = '' if value is None else str(value)
+    return "'" + text_value if text_value[:1] in ('=', '+', '-', '@', '\t', '\r') else text_value
+
+def _csv_response(rows, filename):
+    buffer = io.StringIO()
+    csv.writer(buffer).writerows([[_csv_safe(cell) for cell in row] for row in rows])
+    return Response('﻿' + buffer.getvalue(), mimetype='text/csv; charset=utf-8', headers={
+        'Content-Disposition': f'attachment; filename="{filename}"', 'Cache-Control': 'no-store'})
+
+@app.route('/admin/export/standings.csv')
+@admin_required
+def export_standings():
+    """Final standings. This is the true result, so it ignores any leaderboard freeze."""
+    problems, rows = build_leaderboard(frozen=False)
+    output = [['Rank', 'Username'] + [p.shortname for p in problems] + ['Total']]
+    rank, previous_total = 0, None
+    for position, row in enumerate(rows, start=1):
+        if row['total_points'] != previous_total:
+            rank, previous_total = position, row['total_points']
+        output.append([rank, row['username']] + [cell['points'] for cell in row['problem_points']] + [row['total_points']])
+    return _csv_response(output, 'standings.csv')
+
+@app.route('/admin/export/submissions.csv')
+@admin_required
+def export_submissions():
+    problems = {p.id: p for p in Problem.query.options(db.defer(Problem.batches)).all()}
+    output = [['Submission', 'Username', 'Problem', 'Problem title', 'Language', 'Status', 'Points', 'Time (ms)',
+               'Memory (KB)', 'Submitted at', 'Submitted while frozen']]
+    rows = db.session.query(Submission, User.username).join(User, Submission.user_id == User.id).order_by(Submission.id)
+    for submission, username in rows:
+        problem = problems.get(submission.problem_id)
+        output.append([submission.id, username, problem.shortname if problem else '?', problem.title if problem else '',
+                       submission.language, submission.status, submission.points_earned, submission.execution_time,
+                       submission.memory_used, submission.submitted_at.isoformat(sep=' '),
+                       'yes' if submission.submitted_while_frozen else 'no'])
+    return _csv_response(output, 'submissions.csv')
+
 if __name__ == '__main__':
     with app.app_context():
         # Data is kept across restarts; wiping it must be requested explicitly (RESET_DB=1)
         if os.environ.get('RESET_DB', '0').lower() in ('1', 'true', 'yes'):
             db.drop_all()
         db.create_all()
+        ensure_schema()
         
         # Initialize admin user
         init_admin()
@@ -761,6 +1127,9 @@ if __name__ == '__main__':
                     'leaderboard_frozen': False
                 }, f, indent=4)
     
+    judge_health = check_judge(force=True)
+    print(('Judge OK: ' if judge_health['ok'] else 'WARNING - JUDGE UNAVAILABLE: ') + judge_health['message'])
+
     # Debug mode (Werkzeug debugger + reloader) is opt-in: set FLASK_DEBUG=1 for local development only
     debug = os.environ.get('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
     host = os.environ.get('HOST', '0.0.0.0')  # all interfaces so contestants on the LAN can connect

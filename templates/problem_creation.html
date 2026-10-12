@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-    <title>New problem</title>
+    <title>Problem editor</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <style>
         /* The .batch rule from app.css styles result batches; here it is a card around a group of test cases */
         .batch { padding: 1rem; margin-top: 0; margin-bottom: 1.25rem; }
@@ -20,7 +21,7 @@
 <body>
     <header class="topbar">
         <div class="topbar-inner">
-            <span class="brand"><span class="brand-mark" aria-hidden="true">&lt;/&gt;</span> New problem</span>
+            <span class="brand"><span class="brand-mark" aria-hidden="true">&lt;/&gt;</span> <span id="pageBrand">New problem</span></span>
             <div class="topbar-actions">
                 <button type="button" class="icon-btn" data-theme-toggle aria-label="Toggle light/dark theme" title="Toggle theme">
                     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -31,169 +32,62 @@
     </header>
     <div class="container-narrow">
         <div class="panel"><div class="panel-body">
-        <h1 class="mb-4" style="font-size: 1.5rem;">Create a problem</h1>
+        <h1 class="mb-4" style="font-size: 1.5rem;" id="pageTitle">Create a problem</h1>
         <form id="createProblemForm">
             <div class="mb-3">
-                <label class="form-label">Title</label>
-                <input type="text" class="form-control" name="title" required>
+                <label class="form-label" for="fieldTitle">Title</label>
+                <input type="text" class="form-control" id="fieldTitle" name="title" required maxlength="200">
             </div>
             <div class="mb-3">
-                <label class="form-label">Description (Markdown)</label>
-                <textarea class="form-control" name="description" rows="10" required oninput="updatePreview(this.value)"></textarea>
+                <label class="form-label" for="fieldDescription">Description (Markdown)</label>
+                <textarea class="form-control" id="fieldDescription" name="description" rows="10" required oninput="updatePreview(this.value)"></textarea>
                 <div class="markdown-preview" id="preview"></div>
             </div>
             <div class="mb-3">
-                <label class="form-label">Difficulty</label>
-                <select class="form-select" name="difficulty" required>
+                <label class="form-label" for="fieldDifficulty">Difficulty</label>
+                <select class="form-select" id="fieldDifficulty" name="difficulty" required>
                     <option value="Easy">Easy</option>
                     <option value="Medium">Medium</option>
                     <option value="Hard">Hard</option>
                 </select>
             </div>
             <div class="mb-3">
-                <label class="form-label">Time Limit (ms)</label>
-                <input type="number" class="form-control" name="time_limit" value="1000" required>
+                <label class="form-label" for="fieldTime">Time Limit (ms)</label>
+                <input type="number" class="form-control" id="fieldTime" name="time_limit" value="1000" min="50" max="60000" required>
             </div>
             <div class="mb-3">
-                <label class="form-label">Memory Limit (MB)</label>
-                <input type="number" class="form-control" name="memory_limit" value="256" required>
+                <label class="form-label" for="fieldMemory">Memory Limit (MB)</label>
+                <input type="number" class="form-control" id="fieldMemory" name="memory_limit" value="256" min="16" max="2048" required>
             </div>
             <br>
-            <div id="batches">
-                <div class="batch mb-4">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5>Batch 1</h5>
-                        <button type="button" class="btn btn-danger btn-sm batch-toggle" onclick="toggleBatch(this)">Toggle Visibility</button>
-                        <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
-                    </div>
-                    <div class="mb-2 batch-points">
-                        <label class="form-label">Points</label>
-                        <input type="number" class="form-control" name="batch_points" value="10" required>
-                    </div>
-                    <table class="table test-cases" style="width: 100%;">
-                        <thead>
-                            <tr>
-                                <th style="width: 43%;">Input</th>
-                                <th style="width: 43%;">Output</th>
-                                <th style="width: 14%;"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="test-case">
-                                <td><textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea></td>
-                                <td><textarea type="text" class="form-control" required placeholder="Output"></textarea></td>
-                                <td><button type="button" class="btn btn-danger btn-small" onclick="removeTestCase(this)">Remove Test Case</button></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
-                    <button type="button" class="btn btn-secondary btn-sm batch-upload" onclick="this.children[0].click()"> <!-- first child guaranteed to be the file upload -->
-                        <input class="batch-file" type="file" accept=".zip" hidden onchange="onBatchUpload(this)">
-                        Upload Test Cases (as .zip file)
-                    </button>
-                </div>
-            </div>
+            <div id="batches"></div>
             <button type="button" class="btn btn-secondary mb-3" onclick="addBatch()">Add Batch</button>
             <br><br>
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">Create Problem</button>
+                <button type="submit" class="btn btn-primary" id="submitButton">Create Problem</button>
                 <button type="button" class="btn btn-secondary" onclick="window.close()">Cancel</button>
             </div>
         </form>
         </div></div>
     </div>
     <script>
-        // upload zip file, parse into test cases
-        function onBatchUpload(input) {
-            if (input.files.length > 0) {
-                return;
-            }
-
-            if (!confirm("This will erase all existing test cases for this batch. Are you sure you want to upload this file?")) {
-                input.value = ""; // remove file uploaded
-                return;
-            }
-
-            // read test cases from zip file
-            const data = {}; // test cases
-            JSZip.loadAsync(input.files[0]).then(content => {
-                let numLeft = 0;
-                // count all entries first before any of the asynchronous stuff
-                content.forEach((a, b) => {
-                    numLeft++;
-                });
-
-                content.forEach((relativePath, path) => {
-                    // matches filenames of the form inputxxx.txt or outputxxx.txt, where xxx is test case number
-                    const test_regex = /(\/|\\\\)*(input|output)\d{3}.txt$/g;
-                    if (!test_regex.test(relativePath)) {
-                        numLeft--;
-                        return;
-                    }
-
-                    const filename = relativePath.split('\\').pop().split('/').pop();
-                    const ind_digit = filename.search(/\d/g);
-                    const num = filename.substring(ind_digit, ind_digit + 3);
-                    if (!data[num]) {
-                        data[num] = ["", ""]; // first is input, second is output
-                    }
-                    
-                    let ind = +filename.startsWith("output"); // 0 if false (i.e. input), 1 if true (i.e. output)
-                    path.async('text').then(text => {
-                        data[num][ind] = text;
-                        numLeft--;
-                        showTestCasesIfLoadComplete(numLeft);
-                    });
-                })
-            });
-
-            function showTestCasesIfLoadComplete(numLeftToLoad) {
-                if (numLeftToLoad != 0) {
-                    return;
-                }
-
-                // put test cases into html stuff
-                const parent = input.closest('.batch');
-                const testCaseLoc = parent.querySelector('.test-cases').querySelector('tbody');
-                testCaseLoc.innerHTML = "";
-
-                let numTestCases = 0;
-                for (const num of Object.keys(data))
-                {
-                    const temp = data[num];
-                    const input = temp[0].replaceAll("\n", "<br>");
-                    const output = temp[1].replaceAll("\n", "<br>");
-                    
-                    testCaseLoc.appendChild(buildTestCase(input, output));
-                    numTestCases++;
-                }
-
-                input.value = ""; // clear file so that future zip uploads can be done
-
-                if (numTestCases > 10) {
-                    // hide batch so as to not blow up the user's screen
-                    toggleBatch(parent.querySelector('.batch-toggle'));
-                }
-            }
-        }
+        // /problem_creation.html?edit=<id> edits an existing problem instead of creating a new one
+        const editId = new URLSearchParams(location.search).get('edit');
 
         // update preview of problem description for markdown
         function updatePreview(text) {
             document.getElementById("preview").innerHTML = DOMPurify.sanitize(marked.parse(text));
         }
 
-        // add test case to batch
+        // Test case text is always put into the page through .value, never as HTML
         function buildTestCase(input_text = "", output_text = "") {
-            // innerHTML doesn't catch changes to textarea -> adding to innerHTML will overwrite previous values
-            // therefore, we manually build the test case html
             const tr = document.createElement("tr");
             tr.className = "test-case";
             tr.innerHTML = `
-                <td><textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea></td>
-                <td><textarea type="text" class="form-control" required placeholder="Output"></textarea></td>
-                <td><button type="button" class="btn btn-danger btn-small" onclick="removeTestCase(this)">Remove Test Case</button></td>
+                <td><textarea class="form-control mb-2" required placeholder="Input"></textarea></td>
+                <td><textarea class="form-control" required placeholder="Output"></textarea></td>
+                <td><button type="button" class="btn btn-danger btn-sm" onclick="removeTestCase(this)">Remove</button></td>
             `;
-            // Set values through the DOM so uploaded file contents are never parsed as HTML
             const [inputBox, outputBox] = tr.querySelectorAll("textarea");
             inputBox.value = input_text;
             outputBox.value = output_text;
@@ -201,181 +95,215 @@
         }
 
         function addTestCase(button) {
-            const testCases = button.parentElement.querySelector(".test-cases").querySelector('tbody');
-            testCases.appendChild(buildTestCase());
+            const tbody = button.closest(".batch").querySelector(".test-cases tbody");
+            tbody.appendChild(buildTestCase());
         }
 
-        // add batch
-        function addBatch() {
+        // Create a batch card; `cases` is a list of {input, output}
+        function addBatch(points = 10, cases = [{ input: "", output: "" }]) {
             const batches = document.getElementById("batches");
-            const batchCount = batches.children.length + 1;
-            const newBatch = document.createElement("div");
-            newBatch.className = "batch mb-4";
-            newBatch.innerHTML = `
+            const batch = document.createElement("div");
+            batch.className = "batch mb-4";
+            batch.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h5>Batch ${batchCount}</h5>
-                    <button type="button" class="btn btn-danger btn-sm batch-toggle" onclick="toggleBatch(this)">Toggle Visibility</button>
+                    <h5></h5>
+                    <button type="button" class="btn btn-secondary btn-sm batch-toggle" onclick="toggleBatch(this)">Toggle Visibility</button>
                     <button type="button" class="btn btn-danger btn-sm" onclick="removeBatch(this)">Remove Batch</button>
                 </div>
                 <div class="mb-2 batch-points">
                     <label class="form-label">Points</label>
-                    <input type="number" class="form-control" name="batch_points" value="10" required>
+                    <input type="number" class="form-control" name="batch_points" min="0" max="100000" required>
                 </div>
-                <table class="table test-cases">
+                <table class="table test-cases" style="width: 100%;">
                     <thead>
                         <tr>
-                            <th>Input</th>
-                            <th>Output</th>
-                            <th></th>
+                            <th style="width: 43%;">Input</th>
+                            <th style="width: 43%;">Output</th>
+                            <th style="width: 14%;"></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr class="test-case">
-                            <td><textarea type="text" class="form-control mb-2" required placeholder="Input"></textarea></td>
-                            <td><textarea type="text" class="form-control" required placeholder="Output"></textarea></td>
-                            <td><button type="button" class="btn btn-danger btn-small" onclick="removeTestCase(this)">Remove Test Case</button></td>
-                        </tr>
-                    </tbody>
+                    <tbody></tbody>
                 </table>
                 <button type="button" class="btn btn-secondary btn-sm batch-add" onclick="addTestCase(this)">Add Test Case</button>
-                <button type="button" class="btn btn-secondary btn-sm batch-upload" onclick="this.children[0].click()">
+                <label class="btn btn-secondary btn-sm batch-upload mb-0">
+                    Upload test cases (.zip)
                     <input class="batch-file" type="file" accept=".zip" hidden onchange="onBatchUpload(this)">
-                    Upload Test Cases (as .zip file)
-                </button>
+                </label>
+                <div class="form-text batch-help">The zip needs files named input001.txt / output001.txt, input002.txt / output002.txt, ...</div>
             `;
-            batches.appendChild(newBatch);
+            batch.querySelector("[name='batch_points']").value = points;
+            const tbody = batch.querySelector("tbody");
+            cases.forEach(c => tbody.appendChild(buildTestCase(c.input, c.output)));
+            batches.appendChild(batch);
+            renumberBatches();
+        }
+
+        function renumberBatches() {
+            document.querySelectorAll("#batches .batch").forEach((batch, index) => {
+                const hidden = batch.querySelector(".batch-points").classList.contains("d-none");
+                batch.querySelector("h5").textContent = `Batch ${index + 1}${hidden ? " (hidden)" : ""}`;
+            });
         }
 
         // toggle visibility of batch
         function toggleBatch(button) {
-            const batch = button.closest('.batch')
-            const toToggle = [
-                batch.querySelector('.batch-points'),
-                batch.querySelector('.test-cases'),
-                batch.querySelector('.batch-add'),
-                batch.querySelector('.batch-upload')
-            ];
-            for (const elem of toToggle) {
-                elem.classList.toggle("d-none");
-            }
-
-            if (toToggle[0].classList.contains("d-none")) {
-                // hidden
-                const h5 = batch.querySelector('h5');
-                h5.dataset.original = h5.innerText;
-                h5.dataset.hidden = true;
-                h5.innerText += " (Hidden)";
-            }
-            else {
-                const h5 = batch.querySelector('h5');
-                h5.innerText = h5.dataset.original;
-                h5.dataset.hidden = false;
-            }
-        }
-
-        // remove test case
-        function removeTestCase(button) {
-            const testCase = button.closest('.test-case');
-            if (testCase.closest('tbody').children.length > 1) {
-                testCase.remove();
-            }
-            else {
-                alert("Cannot remove last test case of batch");
-                return;
-            }
-        }
-
-        // remove batch
-        function removeBatch(button) {
             const batch = button.closest(".batch");
-            if (document.querySelectorAll(".batch").length > 1) {
-                batch.remove();
-            } else {
-                alert("Cannot remove the last batch");
-                return;
+            for (const part of [".batch-points", ".test-cases", ".batch-add", ".batch-upload", ".batch-help"]) {
+                batch.querySelector(part).classList.toggle("d-none");
             }
-
-            // Update batch numbers
-            const batches = document.getElementById('batches');
-            Array.from(batches.children).forEach((batch, index) => {
-                const h5 = batch.querySelector('h5');
-                h5.textContent = `Batch ${index + 1}`;
-                h5.dataset.original = h5.textContent;
-                if (h5.dataset.hidden) {
-                    h5.textContent += " (Hidden)";
-                }
-            });
+            renumberBatches();
         }
 
-        // submit problem to server
+        function removeTestCase(button) {
+            const testCase = button.closest(".test-case");
+            if (testCase.closest("tbody").children.length > 1) {
+                testCase.remove();
+            } else {
+                alert("A batch needs at least one test case");
+            }
+        }
+
+        function removeBatch(button) {
+            if (document.querySelectorAll(".batch").length > 1) {
+                button.closest(".batch").remove();
+                renumberBatches();
+            } else {
+                alert("A problem needs at least one batch");
+            }
+        }
+
+        // Fill a batch from a zip of input001.txt / output001.txt, input002.txt / output002.txt, ...
+        async function onBatchUpload(input) {
+            const file = input.files[0];
+            if (!file) {
+                return;
+            }
+            try {
+                const zip = await JSZip.loadAsync(file);
+                const tests = {};
+                for (const entry of Object.values(zip.files)) {
+                    if (entry.dir) continue;
+                    const name = entry.name.split("/").pop().split("\\").pop();
+                    const match = name.match(/^(input|output)(\d+)\.txt$/i);
+                    if (!match) continue;
+                    const number = parseInt(match[2], 10);
+                    tests[number] = tests[number] || {};
+                    tests[number][match[1].toLowerCase()] = (await entry.async("text")).replace(/\r\n?/g, "\n");
+                }
+
+                const numbers = Object.keys(tests).map(Number).sort((a, b) => a - b);
+                if (numbers.length === 0) {
+                    alert("No test files found. Name them input001.txt, output001.txt, input002.txt, ...");
+                    return;
+                }
+                const incomplete = numbers.filter(n => tests[n].input === undefined || tests[n].output === undefined);
+                if (incomplete.length > 0) {
+                    alert(`Every test needs both an input and an output file. Check test number(s): ${incomplete.join(", ")}`);
+                    return;
+                }
+                if (numbers.length > 1000) {
+                    alert("A batch can have at most 1000 test cases");
+                    return;
+                }
+
+                const batch = input.closest(".batch");
+                const tbody = batch.querySelector(".test-cases tbody");
+                const hasContent = Array.from(tbody.querySelectorAll("textarea")).some(box => box.value.trim() !== "");
+                if (hasContent && !confirm("This replaces the existing test cases in this batch. Continue?")) {
+                    return;
+                }
+
+                tbody.replaceChildren(...numbers.map(n => buildTestCase(tests[n].input, tests[n].output)));
+                if (numbers.length > 10 && !batch.querySelector(".batch-points").classList.contains("d-none")) {
+                    toggleBatch(batch.querySelector(".batch-toggle")); // collapse long batches
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Could not read that zip file.");
+            } finally {
+                input.value = ""; // allow choosing the same file again
+            }
+        }
+
+        // collect the form into the payload the server expects
+        function readForm() {
+            const formData = new FormData(document.getElementById("createProblemForm"));
+            return {
+                title: (formData.get("title") || "").trim(),
+                description: (formData.get("description") || "").trim(),
+                difficulty: formData.get("difficulty") || "Easy",
+                time_limit: parseInt(formData.get("time_limit"), 10),
+                memory_limit: parseInt(formData.get("memory_limit"), 10),
+                batches: Array.from(document.querySelectorAll(".batch")).map(batch => ({
+                    points: parseInt(batch.querySelector("[name='batch_points']").value, 10),
+                    test_cases: Array.from(batch.querySelectorAll(".test-case")).map(tc => {
+                        const boxes = tc.querySelectorAll("textarea");
+                        return { input: boxes[0].value.trim(), output: boxes[1].value.trim() };
+                    })
+                }))
+            };
+        }
+
         document.getElementById("createProblemForm").addEventListener("submit", async (e) => {
             e.preventDefault();
+            const data = readForm();
+            if (data.batches.some(batch => batch.test_cases.some(tc => !tc.input || !tc.output))) {
+                alert("Please fill in every test case input and output");
+                return;
+            }
+
+            const button = document.getElementById("submitButton");
+            button.disabled = true;
             try {
-                const form = e.target;
-                const formData = new FormData(form);
-                const data = {
-                    title: formData.get("title")?.trim() || "",
-                    description: formData.get("description")?.trim() || "",
-                    difficulty: formData.get("difficulty") || "Easy",
-                    time_limit: parseInt(formData.get("time_limit") || "1000"),
-                    memory_limit: parseInt(formData.get("memory_limit") || "256"),
-                    batches: Array.from(document.querySelectorAll(".batch")).map(batch => {
-                        const points = parseInt(batch.querySelector("[name='batch_points']").value);
-                        const testCases = Array.from(batch.querySelectorAll(".test-case")).map(tc => {
-                            const inputs = tc.querySelectorAll("textarea");
-                            return {
-                                input: inputs[0]?.value?.trim() || "",
-                                output: inputs[1]?.value?.trim() || ""
-                            };
-                        });
-                        return {
-                            points: points,
-                            test_cases: testCases
-                        };
-                    })
-                };
-
-                if (!data.title) {
-                    alert("Please enter a title");
-                    return;
-                }
-                if (!data.description) {
-                    alert("Please enter a description");
-                    return;
-                }
-                if (data.batches.length === 0) {
-                    alert("Please add at least one batch");
-                    return;
-                }
-                if (data.batches.some(batch => batch.test_cases.length === 0)) {
-                    alert("Each batch must have at least one test case");
-                    return;
-                }
-                if (data.batches.some(batch => batch.test_cases.some(tc => !tc.input || !tc.output))) {
-                    alert("Please fill in all test case fields");
-                    return;
-                }
-
-                const response = await fetch("/create_problem", {
-                    method: "POST",
+                const response = await fetch(editId ? `/problem/${encodeURIComponent(editId)}` : "/create_problem", {
+                    method: editId ? "PUT" : "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(data)
                 });
-
-                const result = await response.json();
+                const result = await response.json().catch(() => ({}));
 
                 if (response.ok) {
-                    alert("Problem created successfully");
+                    alert(editId ? "Problem updated" : "Problem created");
                     if (window.opener && window.opener.loadProblems) window.opener.loadProblems();
                     window.close();
                 } else {
-                    alert(result.error || "Failed to create problem");
+                    alert(result.error || "Could not save the problem");
                 }
             } catch (error) {
                 console.error("Error:", error);
                 alert("An error occurred. Please try again.");
+            } finally {
+                button.disabled = false;
             }
         });
+
+        // Start either blank, or filled from the problem being edited
+        (async function init() {
+            if (!editId) {
+                addBatch();
+                return;
+            }
+            document.getElementById("pageTitle").textContent = "Edit problem";
+            document.getElementById("pageBrand").textContent = "Edit problem";
+            document.getElementById("submitButton").textContent = "Save changes";
+            document.title = "Edit problem";
+            try {
+                const response = await fetch(`/problem/${encodeURIComponent(editId)}`);
+                if (!response.ok) throw new Error(response.status);
+                const problem = await response.json();
+                document.getElementById("fieldTitle").value = problem.title;
+                document.getElementById("fieldDescription").value = problem.description;
+                document.getElementById("fieldDifficulty").value = problem.difficulty;
+                document.getElementById("fieldTime").value = problem.time_limit;
+                document.getElementById("fieldMemory").value = problem.memory_limit;
+                updatePreview(problem.description);
+                (problem.batches || []).forEach(batch => addBatch(batch.points, batch.test_cases));
+                if (!problem.batches || problem.batches.length === 0) addBatch();
+            } catch (error) {
+                alert("Could not load that problem.");
+                window.close();
+            }
+        })();
     </script>
 </body>
-</html> 
+</html>
