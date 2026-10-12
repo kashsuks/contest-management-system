@@ -128,3 +128,9 @@ class TestCsrfCoversEveryUnsafeMethod:
         problem_id = make_problem()
         response = admin.delete(f'/problem/{problem_id}', headers={'Origin': 'http://localhost'})
         assert response.status_code == 200
+
+
+def test_favicon_is_served_without_logging_in(anon):
+    for path in ('/favicon.ico', '/static/favicon.svg'):
+        response = anon.get(path)
+        assert response.status_code == 200 and response.mimetype == 'image/svg+xml', path

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response, send_from_directory
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -276,6 +276,11 @@ def validate_problem(data):
     return None
 
 # Routes
+@app.route('/favicon.ico')
+def favicon():
+    # Browsers ask for this path by default, whatever the page's <link rel="icon"> says
+    return send_from_directory(app.static_folder, 'favicon.svg', mimetype='image/svg+xml', max_age=86400)
+
 @app.route('/')
 def index():
     if not current_user.is_authenticated:
