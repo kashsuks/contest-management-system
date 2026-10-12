@@ -5,7 +5,7 @@
      #/problems  #/problems/<id>  #/submissions  #/submissions/<id>
      #/leaderboard  #/admin/<users|problems|settings>
    All server data is inserted with textContent (see el()); the only HTML we
-   ever inject is markdown, which goes through DOMPurify.
+   ever inject is markdown (see markdown.js), which goes through DOMPurify.
    ========================================================================== */
 
 // ---------------------------------------------------------------- helpers
@@ -28,18 +28,6 @@ function el(tag, attrs = {}, ...children) {
     }
     return node;
 }
-
-function renderMarkdown(text) {
-    return DOMPurify.sanitize(marked.parse(text ?? ''));
-}
-
-// Links inside problem statements open in a new tab
-DOMPurify.addHook('afterSanitizeAttributes', node => {
-    if (node.tagName === 'A') {
-        node.setAttribute('target', '_blank');
-        node.setAttribute('rel', 'noopener noreferrer');
-    }
-});
 
 const storage = {
     get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
@@ -320,7 +308,7 @@ async function showProblem(id, token) {
         el('span', { text: `Time limit ${currentProblem.time_limit % 1000 === 0 ? currentProblem.time_limit / 1000 + ' s' : currentProblem.time_limit + ' ms'}` }),
         el('span', { text: `Memory ${currentProblem.memory_limit} MB` }),
         el('span', { text: `${currentProblem.total_points} points` }));
-    $('#problemStatement').innerHTML = renderMarkdown(currentProblem.description);
+    renderMarkdownInto($('#problemStatement'), currentProblem.description);
 
     ensureEditor();
     const savedLanguage = storage.get(`cms:lang:${state.user}`);
@@ -347,7 +335,7 @@ async function refreshOpenProblem() {
         el('span', { text: `Time limit ${currentProblem.time_limit % 1000 === 0 ? currentProblem.time_limit / 1000 + ' s' : currentProblem.time_limit + ' ms'}` }),
         el('span', { text: `Memory ${currentProblem.memory_limit} MB` }),
         el('span', { text: `${currentProblem.total_points} points` }));
-    $('#problemStatement').innerHTML = renderMarkdown(currentProblem.description);
+    renderMarkdownInto($('#problemStatement'), currentProblem.description);
     toast('This problem was updated by an organiser.', 'info');
 }
 
