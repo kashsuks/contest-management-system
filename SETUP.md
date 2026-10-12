@@ -62,7 +62,7 @@ venv/bin/python manage.py reset-admin-password
 
 Admin -> Users has two forms:
 - **Create a contestant account** for a single user.
-- **Create accounts in bulk**: enter how many accounts you need (1-200) and a username prefix (default `User`). The accounts are created as `User1`, `User2`, ... (continuing after any that already exist) with random passwords, and a PDF is downloaded with one slip per account (`Username:` / `Password:`), nine to a page on US Letter, ready to print and cut up.
+- **Create accounts in bulk**: enter how many accounts you need (1-200) and a username prefix (default `User`). The accounts are created as `User1`, `User2`, ... (continuing after any that already exist) with random passwords, and a PDF is downloaded with one slip per account (`Username:` / `Password:`), ten to an A4 page, ready to print and cut up.
 
 Passwords are stored hashed, so the PDF is the only place they can be read. Keep it safe, print it, then delete it (the page also offers "Download PDF again" until you leave it). If a password is lost, create a new account.
 
