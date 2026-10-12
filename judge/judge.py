@@ -124,6 +124,16 @@ def prepare(code: str, language: str, workdir: str, memory_limit: int) -> Dict[s
     return {'command': run_command}
 
 
+def normalize_output(text: str) -> str:
+    """Compare-friendly form of program output.
+
+    Line endings are unified and whitespace at the end of each line, plus blank lines at the start and end
+    of the output, is ignored, as on most judges. Whitespace *inside* a line still matters.
+    """
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    return '\n'.join(line.rstrip() for line in lines).strip()
+
+
 def run_test_case(workdir: str, command: List[str], test_case: Dict[str, str], time_limit: int,
                   memory_limit: int) -> Dict[str, Any]:
     """Run the prepared program against one test case and return the result."""
@@ -147,8 +157,8 @@ def run_test_case(workdir: str, command: List[str], test_case: Dict[str, str], t
             'memory_used': memory_used
         }
 
-    expected_output = test_case['output'].strip()
-    actual_output = report['stdout'].strip()
+    expected_output = normalize_output(test_case['output'])
+    actual_output = normalize_output(report['stdout'])
 
     if actual_output == expected_output:
         return {'status': 'AC', 'execution_time': execution_time, 'memory_used': memory_used}
