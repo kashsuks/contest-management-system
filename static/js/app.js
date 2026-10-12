@@ -319,6 +319,27 @@ async function showProblem(id, token) {
     requestAnimationFrame(() => editor.refresh());
 }
 
+/** Re-read the open problem (after an admin edited or deleted it) without touching the editor or the draft. */
+async function refreshOpenProblem() {
+    const id = currentProblem.id;
+    const result = await api(`/problem/${id}`);
+    if (result.status === 404) {
+        toast('This problem was removed by an organiser.', 'error');
+        location.hash = '#/problems';
+        return;
+    }
+    if (!result.ok || !currentProblem || currentProblem.id !== id) return;
+    currentProblem = result.data;
+    $('#problemTitle').textContent = currentProblem.title;
+    $('#problemMeta').replaceChildren(
+        difficultyChip(currentProblem.difficulty),
+        el('span', { text: `Time limit ${currentProblem.time_limit % 1000 === 0 ? currentProblem.time_limit / 1000 + ' s' : currentProblem.time_limit + ' ms'}` }),
+        el('span', { text: `Memory ${currentProblem.memory_limit} MB` }),
+        el('span', { text: `${currentProblem.total_points} points` }));
+    $('#problemStatement').innerHTML = renderMarkdown(currentProblem.description);
+    toast('This problem was updated by an organiser.', 'info');
+}
+
 function setBusyAll(busy, which) {
     const run = $('#runBtn'), submit = $('#submitBtn');
     if (busy) {
@@ -628,7 +649,30 @@ function renderAdminProblems() {
         el('td', {}, difficultyChip(problem.difficulty)),
         el('td', { class: 'muted', text: fmtLimits(problem) }),
         el('td', { class: 'num', text: problem.total_points }),
-        el('td', { class: 'num' }, el('a', { href: `#/problems/${Number(problem.id)}`, text: 'View' })))));
+        el('td', { class: 'num', text: problem.submission_count ?? 0 }),
+        el('td', { class: 'num' },
+            el('div', { class: 'd-inline-flex gap-1' },
+                el('a', { class: 'btn btn-quiet btn-sm', href: `#/problems/${Number(problem.id)}`, text: 'View' }),
+                el('button', { type: 'button', class: 'btn btn-quiet btn-sm', text: 'Edit',
+                    onclick: () => window.open(`/problem_creation.html?edit=${Number(problem.id)}`, '_blank') }),
+                el('button', { type: 'button', class: 'btn btn-danger btn-sm', text: 'Delete',
+                    onclick: () => deleteProblem(problem) }))))));
+}
+
+async function deleteProblem(problem) {
+    const count = problem.submission_count || 0;
+    const warning = count
+        ? `Delete "${problem.title}" and its ${count} submission${count === 1 ? '' : 's'}? This cannot be undone.`
+        : `Delete "${problem.title}"? This cannot be undone.`;
+    if (!confirm(warning)) return;
+    const result = await api(`/problem/${Number(problem.id)}`, { method: 'DELETE' });
+    if (result.ok) {
+        toast(`Deleted "${problem.title}".`, 'success');
+        await Promise.all([loadProblems(), loadSubmissions()]);
+        loadLeaderboard();
+    } else {
+        toast(friendlyError(result), 'error');
+    }
 }
 
 async function loadSettings() {
@@ -871,6 +915,11 @@ async function init() {
     socket.on('new_problem', problem => {
         loadProblems();
         toast(`New problem added: ${problem.title}`, 'info');
+    });
+    // A problem was edited or deleted: refresh the lists, and the statement if it is open
+    socket.on('problems_changed', async () => {
+        await Promise.all([loadProblems(), loadSubmissions()]);
+        if (currentProblem && /^#\/problems\/\d+$/.test(location.hash)) refreshOpenProblem();
     });
 }
 

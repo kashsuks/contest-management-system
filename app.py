@@ -167,7 +167,7 @@ def init_admin():
 def reject_cross_origin_posts():
     # Browsers always send Origin on cross-site POSTs; refuse any that don't come from this host
     origin = request.headers.get('Origin')
-    if request.method == 'POST' and origin and urlparse(origin).netloc != request.host:
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and origin and urlparse(origin).netloc != request.host:
         return jsonify({'error': 'Cross-origin request blocked'}), 403
 
 def require_json_fields(*fields):
@@ -185,6 +185,15 @@ def require_json_fields(*fields):
             return view(*args, **kwargs)
         return wrapper
     return decorator
+
+def next_shortname():
+    """The first free label (A, B, ... Z, AA, ...). Labels of existing problems never change, so deleting B
+    leaves a gap that the next new problem fills rather than colliding with C."""
+    used = {name for (name,) in db.session.query(Problem.shortname).all()}
+    index = 0
+    while shortname_for(index) in used:
+        index += 1
+    return shortname_for(index)
 
 def shortname_for(index):
     """0 -> A, 25 -> Z, 26 -> AA, ..."""
@@ -385,13 +394,9 @@ def create_problem():
         if error:
             return jsonify({'error': error}), 400
 
-        # Generate shortname based on problem count
-        problem_count = Problem.query.count()
-        shortname = shortname_for(problem_count)  # A, B, ..., Z, AA, ...
-        
         problem = Problem(
             title=data['title'].strip(),
-            shortname=shortname,
+            shortname=next_shortname(),
             description=data['description'],
             difficulty=data['difficulty'],
             time_limit=data['time_limit'],
@@ -422,20 +427,29 @@ def create_problem():
 @login_required
 def get_problems():
     problems = Problem.query.order_by(Problem.created_at.desc()).all()
-    return jsonify([{
-        'id': p.id,
-        'title': p.title,
-        'shortname': p.shortname,
-        'difficulty': p.difficulty,
-        'time_limit': p.time_limit,
-        'memory_limit': p.memory_limit,
-        'total_points': sum(batch['points'] for batch in p.batches)
-    } for p in problems])
+    counts = {}
+    if current_user.is_admin:
+        counts = dict(db.session.query(Submission.problem_id, func.count(Submission.id)).group_by(Submission.problem_id).all())
+    items = []
+    for p in problems:
+        item = {
+            'id': p.id,
+            'title': p.title,
+            'shortname': p.shortname,
+            'difficulty': p.difficulty,
+            'time_limit': p.time_limit,
+            'memory_limit': p.memory_limit,
+            'total_points': sum(batch['points'] for batch in p.batches)
+        }
+        if current_user.is_admin:
+            item['submission_count'] = counts.get(p.id, 0)
+        items.append(item)
+    return jsonify(items)
 
 @app.route('/problem/<int:problem_id>')
 @login_required
 def get_problem(problem_id):
-    problem = Problem.query.get_or_404(problem_id)
+    problem = db.get_or_404(Problem, problem_id)
     data = {
         'id': problem.id,
         'title': problem.title,
@@ -450,6 +464,43 @@ def get_problem(problem_id):
     if current_user.is_admin:
         data['batches'] = problem.batches
     return jsonify(data)
+
+@app.route('/problem/<int:problem_id>', methods=['PUT'])
+@login_required
+def update_problem(problem_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    error = validate_problem(data)
+    if error:
+        return jsonify({'error': error}), 400
+
+    problem = db.get_or_404(Problem, problem_id)
+    problem.title = data['title'].strip()
+    problem.description = data['description']
+    problem.difficulty = data['difficulty']
+    problem.time_limit = data['time_limit']
+    problem.memory_limit = data['memory_limit']
+    problem.batches = data['batches']  # the label (A, B, ...) is kept
+    db.session.commit()
+    socketio.emit('problems_changed')
+    return jsonify({'message': 'Problem updated', 'id': problem.id})
+
+@app.route('/problem/<int:problem_id>', methods=['DELETE'])
+@login_required
+def delete_problem(problem_id):
+    """Delete a problem together with every submission made to it."""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+    problem = db.get_or_404(Problem, problem_id)
+    deleted = Submission.query.filter_by(problem_id=problem.id).delete()
+    db.session.delete(problem)
+    db.session.commit()
+    socketio.emit('problems_changed')
+    socketio.emit('update_leaderboard')
+    return jsonify({'message': 'Problem deleted', 'deleted_submissions': deleted})
 
 @app.route('/judge_status')
 @login_required
@@ -484,7 +535,11 @@ def submit():
         if 'language' not in data:
             return jsonify({'error': 'Language is required'}), 400
 
-        problem = Problem.query.get_or_404(data['problem_id'])
+        if not _is_int(data['problem_id']):
+            return jsonify({'error': 'Problem ID must be a number'}), 400
+        problem = db.session.get(Problem, data['problem_id'])
+        if problem is None:
+            return jsonify({'error': 'That problem no longer exists'}), 404
         
         # Create submission record
         submission = Submission(
