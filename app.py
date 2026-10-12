@@ -1,17 +1,20 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import json
 import os
 import re
+import secrets
 from datetime import datetime
 import pytz
 from urllib.parse import urlparse
 from judge.judge import judge_submission
-from sqlalchemy import select
+from credentials_pdf import build_credentials_pdf
+from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
@@ -19,6 +22,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 USERNAME_PATTERN = re.compile(r'^[A-Za-z0-9_]{3,32}$')
+BULK_PREFIX_PATTERN = re.compile(r'^[A-Za-z0-9_]{1,24}$')
+BULK_MAX_ACCOUNTS = 200
+# Generated passwords are printed, so leave out look-alikes (0/O, 1/l/I) that are easy to misread
+PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+GENERATED_PASSWORD_LENGTH = 10
 
 app = Flask(__name__)
 
@@ -187,6 +195,48 @@ def shortname_for(index):
         name = chr(65 + rem) + name
     return name
 
+def _is_int(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+def validate_problem(data):
+    """Return an error message if `data` isn't a well-formed problem, else None.
+
+    Stored values are later summed, compared and fed to the judge, so wrong types here would break
+    every contestant's problem list rather than just this problem.
+    """
+    title = data.get('title')
+    if not isinstance(title, str) or not 1 <= len(title.strip()) <= 200:
+        return 'Title must be 1-200 characters'
+    description = data.get('description')
+    if not isinstance(description, str) or not description.strip() or len(description) > 100_000:
+        return 'Description is required (max 100000 characters)'
+    if data.get('difficulty') not in ('Easy', 'Medium', 'Hard'):
+        return 'Difficulty must be Easy, Medium or Hard'
+    time_limit, memory_limit = data.get('time_limit'), data.get('memory_limit')
+    if not _is_int(time_limit) or not 50 <= time_limit <= 60_000:
+        return 'Time limit must be a whole number of milliseconds between 50 and 60000'
+    if not _is_int(memory_limit) or not 16 <= memory_limit <= 2048:
+        return 'Memory limit must be a whole number of MB between 16 and 2048'
+
+    batches = data.get('batches')
+    if not isinstance(batches, list) or not 1 <= len(batches) <= 100:
+        return 'Provide between 1 and 100 batches'
+    for number, batch in enumerate(batches, start=1):
+        if not isinstance(batch, dict):
+            return f'Batch {number} is malformed'
+        if not _is_int(batch.get('points')) or not 0 <= batch['points'] <= 100_000:
+            return f'Batch {number}: points must be a whole number between 0 and 100000'
+        cases = batch.get('test_cases')
+        if not isinstance(cases, list) or not 1 <= len(cases) <= 1000:
+            return f'Batch {number}: provide between 1 and 1000 test cases'
+        for case in cases:
+            if (not isinstance(case, dict) or not isinstance(case.get('input'), str)
+                    or not isinstance(case.get('output'), str)):
+                return f'Batch {number}: every test case needs text input and output'
+            if len(case['input']) > 1_000_000 or len(case['output']) > 1_000_000:
+                return f'Batch {number}: a test case is too large'
+    return None
+
 # Routes
 @app.route('/')
 def index():
@@ -195,7 +245,10 @@ def index():
     return render_template('index.html', contest_name=contest_config.get('contest_name', 'Coding Contest'))
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit('10 per minute', methods=['POST'], key_func=get_remote_address)
+# Only failed attempts count, so a classroom of students logging in at once (possibly behind one shared IP)
+# isn't locked out, while password guessing is still throttled
+@limiter.limit('20 per minute', methods=['POST'], key_func=get_remote_address,
+               deduct_when=lambda response: response.status_code >= 400)
 def login():
     if request.method == 'POST':
         data = request.get_json(silent=True)
@@ -249,6 +302,74 @@ def create_user():
     
     return jsonify({'message': 'User created successfully'}), 201
 
+def next_username_number(prefix):
+    """One more than the highest number already used with this prefix (User1, User2, ... -> 3)."""
+    pattern = re.compile(rf'^{re.escape(prefix)}(\d+)$', re.IGNORECASE)
+    like = prefix.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+    rows = db.session.query(User.username).filter(User.username.ilike(like, escape='\\')).all()
+    numbers = [int(m.group(1)) for (name,) in rows if (m := pattern.match(name))]
+    return max(numbers, default=0) + 1
+
+@app.route('/create_users_batch', methods=['POST'])
+@login_required
+# Hashing hundreds of passwords is the expensive part, so only successful batches count toward the limit
+@limiter.limit('5 per minute', deduct_when=lambda response: response.status_code == 200)
+def create_users_batch():
+    """Create `count` accounts with random passwords and return a printable PDF of the credentials.
+
+    Passwords are only ever stored hashed, so this PDF is the single place they can be read.
+    """
+    if not current_user.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    count = data.get('count')
+    prefix = data.get('prefix', 'User')
+    if not _is_int(count) or not 1 <= count <= BULK_MAX_ACCOUNTS:
+        return jsonify({'error': f'Number of accounts must be between 1 and {BULK_MAX_ACCOUNTS}'}), 400
+    if not isinstance(prefix, str) or not BULK_PREFIX_PATTERN.match(prefix):
+        return jsonify({'error': 'Prefix must be 1-24 characters: letters, digits or underscore'}), 400
+
+    start = next_username_number(prefix)
+    usernames = [f'{prefix}{start + offset}' for offset in range(count)]
+    if len(usernames[-1]) > 32:
+        return jsonify({'error': 'Those usernames would be longer than 32 characters; use a shorter prefix'}), 400
+    taken = db.session.query(User.username).filter(func.lower(User.username).in_([u.lower() for u in usernames])).first()
+    if taken:
+        return jsonify({'error': f'The username {taken[0]} already exists'}), 409
+
+    try:
+        accounts = []
+        for username in usernames:
+            password = ''.join(secrets.choice(PASSWORD_ALPHABET) for _ in range(GENERATED_PASSWORD_LENGTH))
+            user = User(username=username, email=f'{username.lower()}@contest.invalid')
+            user.set_password(password)
+            db.session.add(user)
+            accounts.append((username, password))
+
+        # Build the PDF before committing so a failure can't leave accounts whose passwords nobody has
+        pdf = build_credentials_pdf(accounts, contest_config.get('contest_name', 'Coding Contest'),
+                                    request.host_url.rstrip('/'))
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Some of those usernames or emails already exist. Please try again.'}), 409
+    except Exception:
+        app.logger.exception('Bulk account creation failed')  # never log the passwords
+        db.session.rollback()
+        return jsonify({'error': 'Could not create the accounts'}), 500
+
+    socketio.emit('update_leaderboard')
+    return Response(pdf, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="accounts-{usernames[0]}-to-{usernames[-1]}.pdf"',
+        'Cache-Control': 'no-store',
+        'X-Accounts-Created': str(count),
+        'X-First-Username': usernames[0],
+        'X-Last-Username': usernames[-1],
+    })
+
 @app.route('/create_problem', methods=['POST'])
 @login_required
 def create_problem():
@@ -260,34 +381,16 @@ def create_problem():
         if not isinstance(data, dict):
             return jsonify({'error': 'Request body must be a JSON object'}), 400
         
-        required_fields = ['title', 'description', 'difficulty', 'time_limit', 'memory_limit', 'batches']
-        
-        # Validate required fields
-        for field in required_fields:
-            if field not in data:
-                return jsonify({'error': f'Missing required field: {field}'}), 400
-        
-        # Validate batches
-        if not isinstance(data['batches'], list) or len(data['batches']) == 0:
-            return jsonify({'error': 'At least one batch is required'}), 400
-        
-        for batch in data['batches']:
-            if 'points' not in batch or 'test_cases' not in batch:
-                return jsonify({'error': 'Each batch must have points and test_cases'}), 400
-            
-            if not isinstance(batch['test_cases'], list) or len(batch['test_cases']) == 0:
-                return jsonify({'error': 'Each batch must have at least one test case'}), 400
-            
-            for test_case in batch['test_cases']:
-                if 'input' not in test_case or 'output' not in test_case:
-                    return jsonify({'error': 'Each test case must have input and output'}), 400
-        
+        error = validate_problem(data)
+        if error:
+            return jsonify({'error': error}), 400
+
         # Generate shortname based on problem count
         problem_count = Problem.query.count()
         shortname = shortname_for(problem_count)  # A, B, ..., Z, AA, ...
         
         problem = Problem(
-            title=data['title'],
+            title=data['title'].strip(),
             shortname=shortname,
             description=data['description'],
             difficulty=data['difficulty'],
@@ -608,10 +711,15 @@ def update_contest_settings():
         return jsonify({'error': 'Unauthorized'}), 403
     
     data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not isinstance(data.get('contest_name'), str):
+    if not isinstance(data, dict) or not isinstance(data.get('contest_name'), str) or not data['contest_name'].strip():
         return jsonify({'error': 'Contest name is required'}), 400
+    if len(data['contest_name']) > 80:
+        return jsonify({'error': 'Contest name must be at most 80 characters'}), 400
+    for flag in ('leaderboard_frozen', 'submissions_stopped'):
+        if flag in data and not isinstance(data[flag], bool):
+            return jsonify({'error': f'{flag} must be true or false'}), 400
     
-    contest_config['contest_name'] = data['contest_name']
+    contest_config['contest_name'] = data['contest_name'].strip()
     
     # Handle leaderboard freeze
     if 'leaderboard_frozen' in data:

@@ -190,7 +190,8 @@
             </div>
 
             <div data-admin-panel="users" hidden>
-                <div class="panel" style="max-width: 560px;">
+                <div class="admin-grid">
+                <div class="panel">
                     <div class="panel-head">Create a contestant account</div>
                     <div class="panel-body">
                         <div class="form-error" id="createUserError" role="alert"></div>
@@ -212,6 +213,36 @@
                             <button type="submit" class="btn btn-primary" id="createUserButton">Create account</button>
                         </form>
                     </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-head">Create accounts in bulk</div>
+                    <div class="panel-body">
+                        <p class="text-secondary">Creates the accounts with random passwords and downloads a printable PDF with one slip per account, ready to cut and hand out.</p>
+                        <div class="form-error" id="bulkError" role="alert"></div>
+                        <form id="bulkUsersForm" autocomplete="off">
+                            <div class="mb-3">
+                                <label class="form-label" for="bulkCount">Number of accounts</label>
+                                <input type="number" class="form-control" id="bulkCount" min="1" max="200" value="10" required>
+                                <div class="form-text">Between 1 and 200.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="bulkPrefix">Username prefix</label>
+                                <input type="text" class="form-control" id="bulkPrefix" value="User" maxlength="24" pattern="[A-Za-z0-9_]{1,24}" required autocapitalize="none" spellcheck="false">
+                                <div class="form-text">Accounts are named User1, User2, ... continuing after any that already exist.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary" id="bulkButton">Create accounts &amp; download PDF</button>
+                        </form>
+                        <div class="banner mt-3" id="bulkResult" hidden>
+                            <span aria-hidden="true">&#128273;</span>
+                            <div>
+                                <strong id="bulkResultTitle"></strong>
+                                <div>Passwords are stored hashed and cannot be shown again. Keep the PDF safe and delete it after printing.</div>
+                                <a class="btn btn-secondary btn-sm mt-2" id="bulkDownloadAgain" href="#">Download PDF again</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 </div>
             </div>
 

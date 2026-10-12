@@ -16,8 +16,7 @@ It is safe to re-run; existing secrets and config are kept. The admin password i
 ## Prerequisites
 
 - Python 3.11+ (dependency versions in `requirements.txt` are pinned to what the project is tested with)
-- For C++ submissions: g++ compiler
-- For Java submissions: JDK (Java Development Kit)
+- Docker (compiles and runs contestant code in a sandbox; no local g++ or JDK needed)
 
 ## Backend Setup
 
@@ -52,6 +51,20 @@ python app.py
 ## Admin Account
 
 On first start an `admin` user is created with the password from `ADMIN_PASSWORD` (at least 8 characters, set in `.env`); the app refuses to start without it. The password is never printed or logged. There is no public registration: the admin creates contestant accounts from the admin panel.
+
+`ADMIN_PASSWORD` is only read when the admin account is first created, so editing `.env` later changes nothing. To set a new admin password (without wiping any data), run:
+
+```bash
+venv/bin/python manage.py reset-admin-password
+```
+
+### Creating contestant accounts
+
+Admin -> Users has two forms:
+- **Create a contestant account** for a single user.
+- **Create accounts in bulk**: enter how many accounts you need (1-200) and a username prefix (default `User`). The accounts are created as `User1`, `User2`, ... (continuing after any that already exist) with random passwords, and a PDF is downloaded with one slip per account (`Username:` / `Password:`), ten to an A4 page, ready to print and cut up.
+
+Passwords are stored hashed, so the PDF is the only place they can be read. Keep it safe, print it, then delete it (the page also offers "Download PDF again" until you leave it). If a password is lost, create a new account.
 
 ## Judge System Setup
 
