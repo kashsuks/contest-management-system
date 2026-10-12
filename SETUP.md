@@ -16,8 +16,7 @@ It is safe to re-run; existing secrets and config are kept. The admin password i
 ## Prerequisites
 
 - Python 3.11+ (dependency versions in `requirements.txt` are pinned to what the project is tested with)
-- For C++ submissions: g++ compiler
-- For Java submissions: JDK (Java Development Kit)
+- Docker (compiles and runs contestant code in a sandbox; no local g++ or JDK needed)
 
 ## Backend Setup
 
