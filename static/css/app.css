@@ -269,6 +269,8 @@ textarea.mono, .mono { font-family: var(--mono); font-size: .875rem; }
 .markdown table { border-collapse: collapse; margin: 1rem 0; }
 .markdown th, .markdown td { border: 1px solid var(--border); padding: .4rem .7rem; }
 .markdown th { background: var(--surface-2); }
+/* Maths: wide display formulas scroll sideways instead of running off the card */
+.markdown .katex-display, .markdown-preview .katex-display { overflow-x: auto; overflow-y: hidden; padding: .2rem 0; }
 .markdown blockquote { border-left: 3px solid var(--accent); padding: .1rem 1rem; color: var(--text-2); margin: 1rem 0; }
 .markdown img { max-width: 100%; }
 

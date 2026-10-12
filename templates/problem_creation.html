@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
     <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/katex/katex.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <style>
@@ -16,6 +17,8 @@
     <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/marked/marked.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/dompurify/purify.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/katex/katex.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/markdown.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/jszip/jszip.min.js') }}"></script>
 </head>
 <body>
@@ -39,8 +42,9 @@
                 <input type="text" class="form-control" id="fieldTitle" name="title" required maxlength="200">
             </div>
             <div class="mb-3">
-                <label class="form-label" for="fieldDescription">Description (Markdown)</label>
-                <textarea class="form-control" id="fieldDescription" name="description" rows="10" required oninput="updatePreview(this.value)"></textarea>
+                <label class="form-label" for="fieldDescription">Description (Markdown, LaTeX maths)</label>
+                <textarea class="form-control" id="fieldDescription" name="description" rows="10" required oninput="updatePreview(this.value)" aria-describedby="descriptionHelp"></textarea>
+                <div class="form-text" id="descriptionHelp">Write maths as <code>$x_i \le 10^9$</code> inline or <code>$$ ... $$</code> on its own lines. Use <code>\$</code> for a literal dollar sign.</div>
                 <div class="markdown-preview" id="preview"></div>
             </div>
             <div class="mb-3">
@@ -76,7 +80,7 @@
 
         // update preview of problem description for markdown
         function updatePreview(text) {
-            document.getElementById("preview").innerHTML = DOMPurify.sanitize(marked.parse(text));
+            renderMarkdownInto(document.getElementById("preview"), text);
         }
 
         // Test case text is always put into the page through .value, never as HTML
